@@ -9,6 +9,7 @@ public record TicketingProperties(
         Inventory inventory,
         Order order,
         Waitlist waitlist,
+        WaitingRoom waitingRoom,
         Payment payment,
         Security security,
         Seed seed
@@ -40,6 +41,27 @@ public record TicketingProperties(
      * @param offerWindow exclusive purchase window granted to the head of the queue
      */
     public record Waitlist(Duration offerWindow) {
+    }
+
+    /**
+     * Throttles how fast buyers reach the checkout, one queue per event.
+     *
+     * @param enabled              off by default so load tests can measure the
+     *                             inventory strategies without a gate in front
+     * @param admitRatePerSecond   admissions per second, the sustained drain rate
+     * @param burst                bucket capacity, how much of a quiet period is
+     *                             carried over into a sudden arrival
+     * @param admissionTtl         how long a pass is good for once granted
+     * @param maxAdmissionsPerPoll caps the work a single poll can do, so one
+     *                             request never walks a queue of 100k
+     * @param idleTtl              when an untouched room is dropped from Redis
+     */
+    public record WaitingRoom(boolean enabled,
+                              double admitRatePerSecond,
+                              int burst,
+                              Duration admissionTtl,
+                              int maxAdmissionsPerPoll,
+                              Duration idleTtl) {
     }
 
     /**

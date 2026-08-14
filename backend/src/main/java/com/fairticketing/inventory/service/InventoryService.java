@@ -2,8 +2,12 @@ package com.fairticketing.inventory.service;
 
 import com.fairticketing.common.config.TicketingProperties;
 import com.fairticketing.common.config.TicketingProperties.InventoryStrategy;
+import com.fairticketing.common.error.BusinessException;
+import com.fairticketing.common.error.ErrorCode;
 import com.fairticketing.inventory.domain.InventoryLedgerEntry;
+import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.InventoryLedgerRepository;
+import com.fairticketing.inventory.repository.TicketTierRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -21,15 +25,18 @@ public class InventoryService {
 
     private final Map<InventoryStrategy, InventoryReserver> reservers = new EnumMap<>(InventoryStrategy.class);
     private final InventoryLedgerRepository ledger;
+    private final TicketTierRepository tiers;
     private final TicketingProperties properties;
     private final Clock clock;
 
     public InventoryService(List<InventoryReserver> available,
                             InventoryLedgerRepository ledger,
+                            TicketTierRepository tiers,
                             TicketingProperties properties,
                             Clock clock) {
         available.forEach(reserver -> reservers.put(reserver.strategy(), reserver));
         this.ledger = ledger;
+        this.tiers = tiers;
         this.properties = properties;
         this.clock = clock;
     }
@@ -55,6 +62,20 @@ public class InventoryService {
     public void release(Long tierId, int quantity, Long orderId, InventoryLedgerEntry.Reason reason) {
         active().release(tierId, quantity);
         record(tierId, orderId, -quantity, reason);
+    }
+
+    /**
+     * The live count, which under the Redis strategy is not the number stored
+     * on the tier row: that one trails behind until reconciliation catches it up,
+     * and showing it would tell buyers there are seats left after they have gone.
+     */
+    public int remaining(TicketTier tier) {
+        return active().remaining(tier);
+    }
+
+    public int remaining(Long tierId) {
+        return remaining(tiers.findById(tierId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Ticket tier " + tierId + " not found")));
     }
 
     public InventoryStrategy activeStrategy() {

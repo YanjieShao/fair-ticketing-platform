@@ -44,9 +44,17 @@ ticketing:
     max-tickets-per-user-per-tier: 4
   waitlist:
     offer-window: PT15M
+  waiting-room:
+    enabled: ${FT_WAITING_ROOM_ENABLED:false}
+    admit-rate-per-second: ${FT_WAITING_ROOM_RATE:20}
+    burst: 50
+    admission-ttl: PT5M
+    max-admissions-per-poll: 200
+    idle-ttl: PT12H
   payment:
     failure-rate: ${FT_PAYMENT_FAILURE_RATE:0.0}
   security:
+    # Override with FT_JWT_SECRET before this is ever reachable from the internet.
     jwt-secret: ${FT_JWT_SECRET:dev-only-secret-change-me-please-32bytes-min}
     access-token-ttl: PT2H
   seed:

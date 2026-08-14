@@ -8,7 +8,9 @@ import com.fairticketing.event.repository.EventRepository;
 import com.fairticketing.event.web.EventDetailResponse;
 import com.fairticketing.event.web.EventSearchCriteria;
 import com.fairticketing.event.web.EventSummaryResponse;
+import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.TicketTierRepository;
+import com.fairticketing.inventory.service.InventoryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class EventQueryService {
@@ -28,10 +31,12 @@ public class EventQueryService {
 
     private final EventRepository events;
     private final TicketTierRepository tiers;
+    private final InventoryService inventory;
 
-    public EventQueryService(EventRepository events, TicketTierRepository tiers) {
+    public EventQueryService(EventRepository events, TicketTierRepository tiers, InventoryService inventory) {
         this.events = events;
         this.tiers = tiers;
+        this.inventory = inventory;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +74,14 @@ public class EventQueryService {
     public EventDetailResponse detail(Long eventId) {
         Event event = events.findById(eventId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Event " + eventId + " not found"));
-        return EventDetailResponse.from(event, tiers.findByEventIdOrderByPriceCentsAsc(eventId));
+
+        List<TicketTier> eventTiers = tiers.findByEventIdOrderByPriceCentsAsc(eventId);
+        // Asked of the active strategy rather than read off the row: this is the
+        // number a buyer decides on, so it has to be the one checkout will use.
+        Map<Long, Integer> remaining = eventTiers.stream()
+                .collect(Collectors.toMap(TicketTier::getId, inventory::remaining));
+
+        return EventDetailResponse.from(event, eventTiers, remaining);
     }
 
     private Map<Long, Availability> availabilityFor(List<Event> page) {

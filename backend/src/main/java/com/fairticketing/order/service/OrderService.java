@@ -13,6 +13,7 @@ import com.fairticketing.order.repository.TicketOrderRepository;
 import com.fairticketing.payment.domain.Payment;
 import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.payment.service.PaymentGateway;
+import com.fairticketing.waitingroom.service.WaitingRoomService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,6 +38,7 @@ public class OrderService {
     private final PaymentGateway paymentGateway;
     private final PaymentRepository payments;
     private final OrderNumberGenerator orderNumbers;
+    private final WaitingRoomService waitingRoom;
     private final TicketingProperties properties;
     private final Clock clock;
 
@@ -46,6 +48,7 @@ public class OrderService {
                         PaymentGateway paymentGateway,
                         PaymentRepository payments,
                         OrderNumberGenerator orderNumbers,
+                        WaitingRoomService waitingRoom,
                         TicketingProperties properties,
                         Clock clock) {
         this.orders = orders;
@@ -54,6 +57,7 @@ public class OrderService {
         this.paymentGateway = paymentGateway;
         this.payments = payments;
         this.orderNumbers = orderNumbers;
+        this.waitingRoom = waitingRoom;
         this.properties = properties;
         this.clock = clock;
     }
@@ -80,6 +84,9 @@ public class OrderService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Ticket tier " + tierId + " not found"));
 
         requireOnSale(tier);
+        // Checked before the limit so a queue-jumper is told to queue rather
+        // than being handed a reason that leaks how the tier is configured.
+        waitingRoom.requireAdmission(tier.eventId(), userId);
         requireWithinPurchaseLimit(tier, quantity);
 
         if (!inventory.tryReserve(tierId, quantity)) {

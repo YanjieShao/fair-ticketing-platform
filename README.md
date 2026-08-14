@@ -20,32 +20,36 @@ The name commits the system to three mechanisms, each of which is testable:
 
 ## Status
 
-A buyer can browse events, hold tickets, pay, and cancel, and unpaid holds are
-returned automatically. The waiting room, waitlist, Redis inventory path, and
-the forecasting service are not built yet.
+A buyer can browse events, join a waiting room, hold tickets, pay, and cancel.
+Unpaid holds are returned automatically. Three inventory strategies sit behind
+the same interface and must each pass the same concurrency test. The waitlist
+and the forecasting service are not built yet.
 
 ## Requirements
 
-- Java 21 (the machine also has JDK 26; Maven must run on 21)
-- Maven 3.9+
-- Colima + Docker CLI
+- Java 21
+- Maven 3.9+ (or the wrapper in `backend/`)
+- Docker (Colima, Docker Desktop, or any engine Testcontainers can reach)
 
 ## Running
 
-Start the infrastructure:
-
 ```bash
-colima start
+git clone <your-fork-url>
+cd fair-ticketing-platform
+cp .env.example .env   # then set FT_JWT_SECRET
 docker compose up -d
-```
-
-Run the backend:
-
-```bash
 cd backend
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 ./mvnw spring-boot:run
 ```
+
+If more than one JDK is installed, point Maven at 21. On this machine that is:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+```
+
+`docker-compose.yml` uses local demo credentials (`ticketing` / `ticketing`).
+Do not reuse them anywhere public.
 
 ## Testing
 
@@ -56,9 +60,9 @@ cd backend
 ./mvnw test
 ```
 
-Tests named `*IT` start a real MySQL through Testcontainers and run under
-`mvn verify`. On Colima the Docker socket is not where Testcontainers looks by
-default, so point it there first:
+Tests named `*IT` start a real MySQL and Redis through Testcontainers and run
+under `mvn verify`. GitHub Actions already has a Docker socket where
+Testcontainers expects it. On Colima, point the tests at the VM first:
 
 ```bash
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
@@ -71,8 +75,7 @@ buyers in a race for 100 tickets and asserts not only that exactly 100 sell, but
 that every buyer who missed out was turned away for being too late rather than
 because the system dropped their request; it runs once per inventory strategy.
 `BuyingTicketsApiIT` drives the same flow over HTTP through the real security
-filters, since the concurrency tests call the service directly and would
-otherwise leave the entire web layer unverified.
+filters. `WaitingRoomCheckoutIT` checks that a queue-jumper cannot buy.
 
 ## API
 
@@ -81,6 +84,9 @@ otherwise leave the entire web layer unverified.
 | POST | `/api/auth/register`, `/api/auth/login` | none | obtain a token |
 | GET | `/api/events` | none | search by city, artist, category, date, price |
 | GET | `/api/events/{id}` | none | tiers and remaining stock |
+| POST | `/api/waiting-room/{eventId}/join` | buyer | take a place in line |
+| GET | `/api/waiting-room/{eventId}` | buyer | position; polling is what moves the line |
+| DELETE | `/api/waiting-room/{eventId}` | buyer | give up a place |
 | POST | `/api/orders` | buyer | hold tickets, requires `Idempotency-Key` |
 | POST | `/api/orders/{orderNo}/pay` | buyer | pay through the mock provider |
 | POST | `/api/orders/{orderNo}/cancel` | buyer | release the hold |
@@ -99,19 +105,22 @@ controller runs, comes back in one shape:
 for a ticket is an ordinary outcome rather than a fault, so those answer 409
 with a code that says which rule stopped the buyer: `SOLD_OUT`,
 `PURCHASE_LIMIT_EXCEEDED`, `DUPLICATE_ACTIVE_ORDER`, `EVENT_NOT_ON_SALE`.
+Jumping the waiting room answers 403 with `WAITING_ROOM_TOKEN_REQUIRED`.
 A 500 means the server genuinely broke, and nothing a client can send should
 produce one.
 
 ## Configuration
 
-Secrets and switches come from the environment; the defaults in
-`application.yml` are for local development only and `FT_JWT_SECRET` must be set
-to something private before this is deployed anywhere real.
+Secrets and switches come from the environment. The defaults in
+`application.yml` are for local development only. Copy `.env.example` and set
+`FT_JWT_SECRET` to something private before this is reachable from anywhere
+other than your laptop.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `FT_JWT_SECRET` | dev placeholder | HMAC key for access tokens |
 | `FT_INVENTORY_STRATEGY` | `DB_PESSIMISTIC_LOCK` | which reserver to use |
+| `FT_WAITING_ROOM_ENABLED` | `false` | gate checkout behind the queue |
 | `FT_PAYMENT_FAILURE_RATE` | `0.0` | forces declined payments for demos |
 | `FT_SEED_ENABLED` | `false` | generates the synthetic sales history |
 
@@ -151,8 +160,8 @@ backend/src/main/java/com/fairticketing/
 ├── common/         cross-cutting: errors, clock, idempotency, rate limiting
 ├── auth/           registration, login, JWT, roles
 ├── event/          artists, venues, events, search
-├── inventory/      ticket tiers and stock, two interchangeable reservers
-├── queue/          virtual waiting room
+├── inventory/      ticket tiers and stock, interchangeable reservers
+├── waitingroom/    virtual waiting room
 ├── order/          checkout, state machine, expiry
 ├── payment/        mock payment provider
 ├── waitlist/       FIFO queue, offers, conversion
@@ -174,10 +183,9 @@ relying on an argument about which is faster:
 | `DB_CONDITIONAL_UPDATE` | one `UPDATE` whose `WHERE` clause is the oversell guard |
 | `REDIS_LUA` | atomic decrement in a Lua script, reconciled against the database |
 
-Every strategy has to pass the same concurrency test. The plan is for Redis to
-hold the authoritative counter on the hot path, with the database keeping the
-durable record and a scheduled job reconciling the two, treating the database as
-correct.
+Every strategy has to pass the same concurrency test. Redis holds the
+authoritative counter on the hot path; the database keeps the durable record,
+and a scheduled job reconciles the two, treating the ledger as correct.
 
 ### Checkout takes the contended lock first
 

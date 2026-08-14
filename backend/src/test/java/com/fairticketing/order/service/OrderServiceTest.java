@@ -15,6 +15,7 @@ import com.fairticketing.order.repository.TicketOrderRepository;
 import com.fairticketing.payment.domain.Payment;
 import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.payment.service.PaymentGateway;
+import com.fairticketing.waitingroom.service.WaitingRoomService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +56,7 @@ class OrderServiceTest {
     private final PaymentGateway gateway = mock(PaymentGateway.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final OrderNumberGenerator orderNumbers = mock(OrderNumberGenerator.class);
+    private final WaitingRoomService waitingRoom = mock(WaitingRoomService.class);
 
     private OrderService service;
 
@@ -64,7 +67,8 @@ class OrderServiceTest {
         when(orders.saveAndFlush(any(TicketOrder.class))).thenAnswer(call -> call.getArgument(0));
         when(inventory.tryReserve(anyLong(), anyInt())).thenReturn(true);
 
-        service = new OrderService(orders, tiers, inventory, gateway, payments, orderNumbers, properties(), clock);
+        service = new OrderService(
+                orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, properties(), clock);
     }
 
     @Nested
@@ -136,6 +140,19 @@ class OrderServiceTest {
             assertThatThrownBy(() -> service.checkout(USER_ID, TIER_ID, 1, "key-1"))
                     .isInstanceOf(BusinessException.class)
                     .extracting("code").isEqualTo(ErrorCode.EVENT_NOT_ON_SALE);
+        }
+
+        @Test
+        @DisplayName("a queue-jumper is turned away before stock is touched")
+        void rejects_checkout_without_a_waiting_room_pass() {
+            givenTier(EventStatus.ON_SALE);
+            doThrow(new BusinessException(ErrorCode.WAITING_ROOM_TOKEN_REQUIRED, "Join the waiting room"))
+                    .when(waitingRoom).requireAdmission(EVENT_ID, USER_ID);
+
+            assertThatThrownBy(() -> service.checkout(USER_ID, TIER_ID, 1, "key-1"))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("code").isEqualTo(ErrorCode.WAITING_ROOM_TOKEN_REQUIRED);
+            verify(inventory, never()).tryReserve(anyLong(), anyInt());
         }
 
         @Test
@@ -267,6 +284,7 @@ class OrderServiceTest {
                 new TicketingProperties.Inventory(InventoryStrategy.DB_PESSIMISTIC_LOCK),
                 new TicketingProperties.Order(Duration.ofMinutes(10), 4),
                 new TicketingProperties.Waitlist(Duration.ofMinutes(15)),
+                new TicketingProperties.WaitingRoom(false, 20, 50, Duration.ofMinutes(5), 200, Duration.ofHours(12)),
                 new TicketingProperties.Payment(0.0),
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
                 new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L));

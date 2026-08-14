@@ -1,6 +1,7 @@
 package com.fairticketing.inventory.service;
 
 import com.fairticketing.common.config.TicketingProperties.InventoryStrategy;
+import com.fairticketing.inventory.domain.TicketTier;
 
 /**
  * Holds and returns stock for one ticket tier.
@@ -17,6 +18,13 @@ public interface InventoryReserver {
     boolean tryReserve(Long tierId, int quantity);
 
     void release(Long tierId, int quantity);
+
+    /**
+     * How many are left according to whatever this implementation treats as the
+     * live count, which is not always the number stored on the tier row. Takes
+     * the loaded tier so a listing does not re-query once per row.
+     */
+    int remaining(TicketTier tier);
 
     InventoryStrategy strategy();
 }

@@ -1,5 +1,6 @@
 package com.fairticketing.inventory.repository;
 
+import com.fairticketing.event.domain.EventStatus;
 import com.fairticketing.inventory.domain.TicketTier;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +27,9 @@ public interface TicketTierRepository extends JpaRepository<TicketTier, Long> {
              where t.id = :id
             """)
     Optional<TierPurchaseView> findPurchaseView(@Param("id") Long id);
+
+    @Query("select t.id from TicketTier t where t.event.status in :statuses")
+    List<Long> findIdsByEventStatuses(@Param("statuses") Collection<EventStatus> statuses);
 
     /** Used by the database-locking reserver. Serialises buyers on one tier. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

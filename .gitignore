@@ -1,6 +1,13 @@
 target/
 !.mvn/wrapper/maven-wrapper.jar
 
+# Local secrets and machine-specific overrides. Copy .env.example instead.
+.env
+.env.*
+!.env.example
+**/application-local.yml
+**/application-local.yaml
+
 node_modules/
 dist/
 .vite/
@@ -9,12 +16,16 @@ __pycache__/
 .venv/
 *.pyc
 
-.env
-.env.local
-
 .idea/
 .vscode/
 *.iml
 .DS_Store
+*.swp
+*~
 
 *.log
+hs_err_pid*
+replay_pid*
+
+# Cursor / editor
+.cursor/

@@ -43,6 +43,11 @@ public class DbPessimisticInventoryReserver implements InventoryReserver {
     }
 
     @Override
+    public int remaining(TicketTier tier) {
+        return tier.availableQuantity();
+    }
+
+    @Override
     public InventoryStrategy strategy() {
         return InventoryStrategy.DB_PESSIMISTIC_LOCK;
     }

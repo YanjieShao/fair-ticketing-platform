@@ -1,6 +1,7 @@
 package com.fairticketing.inventory.service;
 
 import com.fairticketing.common.config.TicketingProperties.InventoryStrategy;
+import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.TicketTierRepository;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,11 @@ public class DbConditionalInventoryReserver implements InventoryReserver {
     @Override
     public void release(Long tierId, int quantity) {
         tiers.release(tierId, quantity);
+    }
+
+    @Override
+    public int remaining(TicketTier tier) {
+        return tier.availableQuantity();
     }
 
     @Override

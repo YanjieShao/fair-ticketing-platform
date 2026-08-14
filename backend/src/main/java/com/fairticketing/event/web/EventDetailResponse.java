@@ -6,6 +6,7 @@ import com.fairticketing.inventory.domain.TicketTier;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 public record EventDetailResponse(
         Long id,
@@ -34,20 +35,20 @@ public record EventDetailResponse(
             int maxPerUser,
             boolean soldOut) {
 
-        static TierView from(TicketTier tier) {
+        static TierView from(TicketTier tier, int remaining) {
             return new TierView(
                     tier.getId(),
                     tier.getName(),
                     tier.getPriceCents(),
                     tier.getCurrency(),
                     tier.getTotalQuantity(),
-                    tier.availableQuantity(),
+                    remaining,
                     tier.getMaxPerUser(),
-                    tier.isSoldOut());
+                    remaining <= 0);
         }
     }
 
-    public static EventDetailResponse from(Event event, List<TicketTier> tiers) {
+    public static EventDetailResponse from(Event event, List<TicketTier> tiers, Map<Long, Integer> remaining) {
         return new EventDetailResponse(
                 event.getId(),
                 event.getTitle(),
@@ -63,6 +64,8 @@ public record EventDetailResponse(
                 event.getSalesStartAt(),
                 event.getSalesEndAt(),
                 event.isWaitingRoomEnabled(),
-                tiers.stream().map(TierView::from).toList());
+                tiers.stream()
+                        .map(tier -> TierView.from(tier, remaining.getOrDefault(tier.getId(), tier.availableQuantity())))
+                        .toList());
     }
 }

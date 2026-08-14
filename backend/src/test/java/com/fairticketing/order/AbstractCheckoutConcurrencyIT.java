@@ -15,6 +15,8 @@ import com.fairticketing.event.repository.VenueRepository;
 import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.InventoryLedgerRepository;
 import com.fairticketing.inventory.repository.TicketTierRepository;
+import com.fairticketing.inventory.service.InventoryReconciliationService;
+import com.fairticketing.inventory.service.InventoryReconciliationService.Reconciliation;
 import com.fairticketing.inventory.service.InventoryService;
 import com.fairticketing.order.domain.OrderStatus;
 import com.fairticketing.order.repository.TicketOrderRepository;
@@ -24,6 +26,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -71,6 +75,10 @@ abstract class AbstractCheckoutConcurrencyIT extends AbstractIntegrationTest {
     private TicketOrderRepository orders;
     @Autowired
     private InventoryLedgerRepository ledger;
+    @Autowired
+    private InventoryReconciliationService reconciliation;
+    @Autowired
+    private StringRedisTemplate redis;
 
     private Long tierId;
     private List<Long> buyerIds;
@@ -79,6 +87,10 @@ abstract class AbstractCheckoutConcurrencyIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void seedOneOversubscribedTier() {
+        redis.execute((RedisCallback<Object>) connection -> {
+            connection.serverCommands().flushDb();
+            return null;
+        });
         orders.deleteAllInBatch();
         ledger.deleteAllInBatch();
         tiers.deleteAllInBatch();
@@ -160,17 +172,26 @@ abstract class AbstractCheckoutConcurrencyIT extends AbstractIntegrationTest {
                 .containsOnlyKeys("SOLD_OUT");
         assertThat(sold.get()).isEqualTo(STOCK);
         assertThat(rejections.get("SOLD_OUT")).isEqualTo(BUYERS - STOCK);
-
-        TicketTier tier = tiers.findById(tierId).orElseThrow();
-        assertThat(tier.getReservedQuantity()).isEqualTo(STOCK);
-        assertThat(tier.availableQuantity()).isZero();
-        assertThat(tier.isSoldOut()).isTrue();
+        assertThat(inventoryService.remaining(tierId)).isZero();
 
         // Rolled back attempts must leave nothing behind.
         assertThat(orders.count()).isEqualTo(STOCK);
         assertThat(orders.findAll()).allSatisfy(order ->
                 assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT));
         assertThat(ledger.netDeltaForTier(tierId)).isEqualTo(STOCK);
+
+        // The ledger is what actually happened. Under the Redis strategy the tier
+        // row is not written on the hot path and only catches up here, so the
+        // comparison is the point rather than an afterthought.
+        Reconciliation result = reconciliation.reconcileTier(tierId);
+        assertThat(result.fromLedger()).isEqualTo(STOCK);
+        if (result.redisCounter() != null) {
+            assertThat(result.redisCounter()).isEqualTo(result.redisExpected()).isZero();
+        }
+
+        TicketTier tier = tiers.findById(tierId).orElseThrow();
+        assertThat(tier.getReservedQuantity()).isEqualTo(STOCK);
+        assertThat(tier.isSoldOut()).isTrue();
     }
 
     private static String describe(Exception rejection) {
