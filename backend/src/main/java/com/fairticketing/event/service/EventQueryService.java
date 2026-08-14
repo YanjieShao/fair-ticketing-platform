@@ -69,7 +69,7 @@ public class EventQueryService {
     public EventDetailResponse detail(Long eventId) {
         Event event = events.findById(eventId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Event " + eventId + " not found"));
-        return EventDetailResponse.from(event, tiers.findByEventId(eventId));
+        return EventDetailResponse.from(event, tiers.findByEventIdOrderByPriceCentsAsc(eventId));
     }
 
     private Map<Long, Availability> availabilityFor(List<Event> page) {

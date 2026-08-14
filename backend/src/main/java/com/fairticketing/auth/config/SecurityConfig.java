@@ -1,6 +1,7 @@
 package com.fairticketing.auth.config;
 
 import com.fairticketing.common.config.TicketingProperties;
+import com.fairticketing.common.error.SecurityErrorResponder;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,9 +27,11 @@ import java.nio.charset.StandardCharsets;
 public class SecurityConfig {
 
     private final TicketingProperties properties;
+    private final SecurityErrorResponder errorResponder;
 
-    public SecurityConfig(TicketingProperties properties) {
+    public SecurityConfig(TicketingProperties properties, SecurityErrorResponder errorResponder) {
         this.properties = properties;
+        this.errorResponder = errorResponder;
     }
 
     @Bean
@@ -43,7 +46,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
+                        .authenticationEntryPoint(errorResponder)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(errorResponder)
+                        .accessDeniedHandler(errorResponder))
                 .build();
     }
 

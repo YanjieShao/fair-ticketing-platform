@@ -13,7 +13,8 @@ import java.util.Optional;
 
 public interface TicketTierRepository extends JpaRepository<TicketTier, Long> {
 
-    List<TicketTier> findByEventId(Long eventId);
+    /** Ordered, so the ticket types do not reshuffle between page loads. */
+    List<TicketTier> findByEventIdOrderByPriceCentsAsc(Long eventId);
 
     @Query("""
             select new com.fairticketing.inventory.repository.TierPurchaseView(

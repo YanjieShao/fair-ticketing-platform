@@ -19,16 +19,11 @@ import com.fairticketing.inventory.service.InventoryService;
 import com.fairticketing.order.domain.OrderStatus;
 import com.fairticketing.order.repository.TicketOrderRepository;
 import com.fairticketing.order.service.OrderService;
+import com.fairticketing.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -52,21 +47,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Subclasses pin a different inventory strategy, so every implementation has
  * to pass the same bar.
  */
-@SpringBootTest
-@Testcontainers
-// Pinned rather than left to application.yml: the seeder is switched on by an
-// environment variable, and a developer who happens to have it exported should
-// not end up running a 200-second data generator inside a unit of test setup.
-@TestPropertySource(properties = "ticketing.seed.enabled=false")
-abstract class AbstractCheckoutConcurrencyIT {
+abstract class AbstractCheckoutConcurrencyIT extends AbstractIntegrationTest {
 
     private static final int STOCK = 100;
     private static final int BUYERS = 500;
     private static final int THREADS = 32;
-
-    @Container
-    @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
 
     @Autowired
     private OrderService orderService;

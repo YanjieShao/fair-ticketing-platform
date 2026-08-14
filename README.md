@@ -66,10 +66,13 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ./mvnw verify
 ```
 
-The one worth reading is `AbstractCheckoutConcurrencyIT`: 500 buyers race for
-100 tickets, and it asserts not only that exactly 100 sell, but that every buyer
-who missed out was turned away for being too late rather than because the system
-dropped their request. It runs once per inventory strategy.
+Two of them carry most of the weight. `AbstractCheckoutConcurrencyIT` puts 500
+buyers in a race for 100 tickets and asserts not only that exactly 100 sell, but
+that every buyer who missed out was turned away for being too late rather than
+because the system dropped their request; it runs once per inventory strategy.
+`BuyingTicketsApiIT` drives the same flow over HTTP through the real security
+filters, since the concurrency tests call the service directly and would
+otherwise leave the entire web layer unverified.
 
 ## API
 
@@ -82,6 +85,22 @@ dropped their request. It runs once per inventory strategy.
 | POST | `/api/orders/{orderNo}/pay` | buyer | pay through the mock provider |
 | POST | `/api/orders/{orderNo}/cancel` | buyer | release the hold |
 | GET | `/api/orders`, `/api/orders/{orderNo}` | buyer | order history |
+
+### Errors
+
+Every failure, including the ones rejected by security filters before any
+controller runs, comes back in one shape:
+
+```json
+{ "code": "SOLD_OUT", "message": "Not enough tickets left in this tier", "timestamp": "..." }
+```
+
+`code` is the stable part and the one clients should branch on. Losing a race
+for a ticket is an ordinary outcome rather than a fault, so those answer 409
+with a code that says which rule stopped the buyer: `SOLD_OUT`,
+`PURCHASE_LIMIT_EXCEEDED`, `DUPLICATE_ACTIVE_ORDER`, `EVENT_NOT_ON_SALE`.
+A 500 means the server genuinely broke, and nothing a client can send should
+produce one.
 
 ## Configuration
 
