@@ -1,0 +1,76 @@
+package com.fairticketing.inventory.service;
+
+import com.fairticketing.common.config.TicketingProperties;
+import com.fairticketing.common.config.TicketingProperties.InventoryStrategy;
+import com.fairticketing.inventory.domain.InventoryLedgerEntry;
+import com.fairticketing.inventory.repository.InventoryLedgerRepository;
+import org.springframework.stereotype.Service;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Chooses the configured reserver and records every movement in the ledger, so
+ * swapping strategies changes only how stock is held, never how it is audited.
+ */
+@Service
+public class InventoryService {
+
+    private final Map<InventoryStrategy, InventoryReserver> reservers = new EnumMap<>(InventoryStrategy.class);
+    private final InventoryLedgerRepository ledger;
+    private final TicketingProperties properties;
+    private final Clock clock;
+
+    public InventoryService(List<InventoryReserver> available,
+                            InventoryLedgerRepository ledger,
+                            TicketingProperties properties,
+                            Clock clock) {
+        available.forEach(reserver -> reservers.put(reserver.strategy(), reserver));
+        this.ledger = ledger;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    /**
+     * Moves the stock. Auditing is a separate call because the order row does
+     * not exist yet at this point: taking the tier lock before inserting the
+     * order is what keeps the lock order the same for every buyer, and an
+     * order row cannot be inserted without first taking a shared lock on the
+     * tier it references.
+     *
+     * <p>The pair cannot drift apart because both run inside the checkout
+     * transaction, so anything that skips the second call rolls back the first.
+     */
+    public boolean tryReserve(Long tierId, int quantity) {
+        return active().tryReserve(tierId, quantity);
+    }
+
+    public void recordReservation(Long tierId, Long orderId, int quantity) {
+        record(tierId, orderId, quantity, InventoryLedgerEntry.Reason.RESERVE);
+    }
+
+    public void release(Long tierId, int quantity, Long orderId, InventoryLedgerEntry.Reason reason) {
+        active().release(tierId, quantity);
+        record(tierId, orderId, -quantity, reason);
+    }
+
+    public InventoryStrategy activeStrategy() {
+        return properties.inventory().strategy();
+    }
+
+    private InventoryReserver active() {
+        InventoryStrategy strategy = activeStrategy();
+        InventoryReserver reserver = reservers.get(strategy);
+        if (reserver == null) {
+            throw new IllegalStateException("No inventory reserver available for strategy " + strategy);
+        }
+        return reserver;
+    }
+
+    private void record(Long tierId, Long orderId, int delta, InventoryLedgerEntry.Reason reason) {
+        ledger.save(new InventoryLedgerEntry(tierId, orderId, delta, reason, Instant.now(clock)));
+    }
+}
