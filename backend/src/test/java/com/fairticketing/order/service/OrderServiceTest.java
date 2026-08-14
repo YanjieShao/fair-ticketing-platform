@@ -311,6 +311,7 @@ class OrderServiceTest {
                 new TicketingProperties.WaitingRoom(false, 20, 50, Duration.ofMinutes(5), 200, Duration.ofHours(12)),
                 new TicketingProperties.Payment(0.0),
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
-                new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L));
+                new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L),
+                new TicketingProperties.Cors(List.of("http://localhost:5173")));
     }
 }

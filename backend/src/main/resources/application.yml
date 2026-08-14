@@ -57,6 +57,8 @@ ticketing:
     # Override with FT_JWT_SECRET before this is ever reachable from the internet.
     jwt-secret: ${FT_JWT_SECRET:dev-only-secret-change-me-please-32bytes-min}
     access-token-ttl: PT2H
+  cors:
+    allowed-origins: ${FT_CORS_ORIGINS:http://localhost:5173}
   seed:
     enabled: ${FT_SEED_ENABLED:false}
     artists: 40

@@ -20,16 +20,17 @@ The name commits the system to three mechanisms, each of which is testable:
 
 ## Status
 
-A buyer can browse events, join a waiting room, hold tickets, pay, and cancel.
-Unpaid holds are returned automatically. Three inventory strategies sit behind
-the same interface and must each pass the same concurrency test. Cancelled and
-expired tickets are offered to the waitlist in join order. The forecasting
-service is not built yet.
+A buyer can browse events, join a waiting room, hold tickets, pay, and cancel
+from the React UI. Unpaid holds are returned automatically. Three inventory
+strategies sit behind the same interface and must each pass the same concurrency
+test. Cancelled and expired tickets are offered to the waitlist in join order.
+The forecasting service is not built yet.
 
 ## Requirements
 
 - Java 21
 - Maven 3.9+ (or the wrapper in `backend/`)
+- Node 22+ (for the UI)
 - Docker (Colima, Docker Desktop, or any engine Testcontainers can reach)
 
 ## Running
@@ -43,6 +44,15 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite server at http://localhost:5173 proxies `/api` to the backend on 8080.
 If more than one JDK is installed, point Maven at 21. On this machine that is:
 
 ```bash
@@ -59,6 +69,13 @@ Unit tests need nothing but a JVM:
 ```bash
 cd backend
 ./mvnw test
+```
+
+The UI tests run in Vitest and do not need the backend:
+
+```bash
+cd frontend
+npm test
 ```
 
 Tests named `*IT` start a real MySQL and Redis through Testcontainers and run
@@ -129,6 +146,7 @@ other than your laptop.
 | `FT_WAITING_ROOM_ENABLED` | `false` | gate checkout behind the queue |
 | `FT_PAYMENT_FAILURE_RATE` | `0.0` | forces declined payments for demos |
 | `FT_SEED_ENABLED` | `false` | generates the synthetic sales history |
+| `FT_CORS_ORIGINS` | `http://localhost:5173` | browser origins allowed to call the API directly |
 
 ## Seed data
 

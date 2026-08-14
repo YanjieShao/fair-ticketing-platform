@@ -3,6 +3,7 @@ package com.fairticketing.common.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 @ConfigurationProperties(prefix = "ticketing")
 public record TicketingProperties(
@@ -12,7 +13,8 @@ public record TicketingProperties(
         WaitingRoom waitingRoom,
         Payment payment,
         Security security,
-        Seed seed
+        Seed seed,
+        Cors cors
 ) {
 
     /**
@@ -71,6 +73,9 @@ public record TicketingProperties(
     }
 
     public record Security(String jwtSecret, Duration accessTokenTtl) {
+    }
+
+    public record Cors(List<String> allowedOrigins) {
     }
 
     /**
