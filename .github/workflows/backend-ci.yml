@@ -1,0 +1,26 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # verify, not test: the concurrency tests are the point of this project and
+      # they need the real database. GitHub runners already expose a Docker socket
+      # where Testcontainers expects it.
+      - name: Build and test
+        working-directory: backend
+        run: ./mvnw -B verify
