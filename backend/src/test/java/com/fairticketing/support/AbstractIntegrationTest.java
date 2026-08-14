@@ -1,5 +1,9 @@
 package com.fairticketing.support;
 
+import com.fairticketing.notification.repository.NotificationRepository;
+import com.fairticketing.waitlist.repository.WaitlistEntryRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.TestPropertySource;
@@ -34,4 +38,15 @@ public abstract class AbstractIntegrationTest {
     @Container
     @ServiceConnection(name = "redis")
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+
+    @Autowired
+    private WaitlistEntryRepository waitlistEntries;
+    @Autowired
+    private NotificationRepository notifications;
+
+    @BeforeEach
+    void clearWaitlistAndNotifications() {
+        notifications.deleteAllInBatch();
+        waitlistEntries.deleteAllInBatch();
+    }
 }

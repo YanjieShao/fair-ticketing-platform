@@ -22,8 +22,9 @@ The name commits the system to three mechanisms, each of which is testable:
 
 A buyer can browse events, join a waiting room, hold tickets, pay, and cancel.
 Unpaid holds are returned automatically. Three inventory strategies sit behind
-the same interface and must each pass the same concurrency test. The waitlist
-and the forecasting service are not built yet.
+the same interface and must each pass the same concurrency test. Cancelled and
+expired tickets are offered to the waitlist in join order. The forecasting
+service is not built yet.
 
 ## Requirements
 
@@ -76,6 +77,8 @@ that every buyer who missed out was turned away for being too late rather than
 because the system dropped their request; it runs once per inventory strategy.
 `BuyingTicketsApiIT` drives the same flow over HTTP through the real security
 filters. `WaitingRoomCheckoutIT` checks that a queue-jumper cannot buy.
+`WaitlistCheckoutIT` checks that a cancelled ticket is held for the next person
+in line rather than whoever hits checkout first.
 
 ## API
 
@@ -87,6 +90,9 @@ filters. `WaitingRoomCheckoutIT` checks that a queue-jumper cannot buy.
 | POST | `/api/waiting-room/{eventId}/join` | buyer | take a place in line |
 | GET | `/api/waiting-room/{eventId}` | buyer | position; polling is what moves the line |
 | DELETE | `/api/waiting-room/{eventId}` | buyer | give up a place |
+| POST | `/api/waitlist` | buyer | join after a tier sells out |
+| GET | `/api/waitlist`, `/api/waitlist/{id}` | buyer | place in line and offer window |
+| DELETE | `/api/waitlist/{id}` | buyer | leave the queue |
 | POST | `/api/orders` | buyer | hold tickets, requires `Idempotency-Key` |
 | POST | `/api/orders/{orderNo}/pay` | buyer | pay through the mock provider |
 | POST | `/api/orders/{orderNo}/cancel` | buyer | release the hold |

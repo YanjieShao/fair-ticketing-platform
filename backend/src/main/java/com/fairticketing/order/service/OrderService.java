@@ -14,6 +14,7 @@ import com.fairticketing.payment.domain.Payment;
 import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.payment.service.PaymentGateway;
 import com.fairticketing.waitingroom.service.WaitingRoomService;
+import com.fairticketing.waitlist.service.WaitlistService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +40,7 @@ public class OrderService {
     private final PaymentRepository payments;
     private final OrderNumberGenerator orderNumbers;
     private final WaitingRoomService waitingRoom;
+    private final WaitlistService waitlist;
     private final TicketingProperties properties;
     private final Clock clock;
 
@@ -49,6 +51,7 @@ public class OrderService {
                         PaymentRepository payments,
                         OrderNumberGenerator orderNumbers,
                         WaitingRoomService waitingRoom,
+                        WaitlistService waitlist,
                         TicketingProperties properties,
                         Clock clock) {
         this.orders = orders;
@@ -58,6 +61,7 @@ public class OrderService {
         this.payments = payments;
         this.orderNumbers = orderNumbers;
         this.waitingRoom = waitingRoom;
+        this.waitlist = waitlist;
         this.properties = properties;
         this.clock = clock;
     }
@@ -83,13 +87,18 @@ public class OrderService {
         TierPurchaseView tier = tiers.findPurchaseView(tierId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Ticket tier " + tierId + " not found"));
 
-        requireOnSale(tier);
-        // Checked before the limit so a queue-jumper is told to queue rather
-        // than being handed a reason that leaks how the tier is configured.
-        waitingRoom.requireAdmission(tier.eventId(), userId);
+        var offer = waitlist.consumeOffer(userId, tierId, quantity);
+        boolean fromWaitlist = offer.isPresent();
+
+        if (!fromWaitlist) {
+            requireOnSale(tier);
+            waitingRoom.requireAdmission(tier.eventId(), userId);
+        } else if (Instant.now(clock).isAfter(tier.salesEndAt())) {
+            throw new BusinessException(ErrorCode.EVENT_NOT_ON_SALE, "This event is outside its sales window");
+        }
         requireWithinPurchaseLimit(tier, quantity);
 
-        if (!inventory.tryReserve(tierId, quantity)) {
+        if (!fromWaitlist && !inventory.tryReserve(tierId, quantity)) {
             throw new BusinessException(ErrorCode.SOLD_OUT, "Not enough tickets left in this tier");
         }
 
@@ -115,7 +124,11 @@ public class OrderService {
                     "You already have an order in progress for this event");
         }
 
-        inventory.recordReservation(tierId, order.getId(), quantity);
+        if (fromWaitlist) {
+            waitlist.markConverted(offer.get(), order.getId());
+        } else {
+            inventory.recordReservation(tierId, order.getId(), quantity);
+        }
         order.transitionTo(OrderStatus.PENDING_PAYMENT, now);
         return order;
     }
@@ -151,6 +164,7 @@ public class OrderService {
         order.transitionTo(OrderStatus.CANCELLED, now);
         inventory.release(order.getTierId(), order.getQuantity(), order.getId(),
                 InventoryLedgerEntry.Reason.RELEASE_CANCELLED);
+        waitlist.offerHead(order.getTierId());
         return order;
     }
 
@@ -179,6 +193,7 @@ public class OrderService {
         order.transitionTo(OrderStatus.EXPIRED, now);
         inventory.release(order.getTierId(), order.getQuantity(), order.getId(),
                 InventoryLedgerEntry.Reason.RELEASE_EXPIRED);
+        waitlist.offerHead(order.getTierId());
     }
 
     private TicketOrder loadOwned(Long userId, String orderNo) {

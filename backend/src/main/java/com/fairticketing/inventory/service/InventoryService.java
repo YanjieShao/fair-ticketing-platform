@@ -56,12 +56,16 @@ public class InventoryService {
     }
 
     public void recordReservation(Long tierId, Long orderId, int quantity) {
-        record(tierId, orderId, quantity, InventoryLedgerEntry.Reason.RESERVE);
+        writeLedger(tierId, orderId, quantity, InventoryLedgerEntry.Reason.RESERVE);
+    }
+
+    public void recordHold(Long tierId, int quantity, InventoryLedgerEntry.Reason reason) {
+        writeLedger(tierId, null, quantity, reason);
     }
 
     public void release(Long tierId, int quantity, Long orderId, InventoryLedgerEntry.Reason reason) {
         active().release(tierId, quantity);
-        record(tierId, orderId, -quantity, reason);
+        writeLedger(tierId, orderId, -quantity, reason);
     }
 
     /**
@@ -91,7 +95,7 @@ public class InventoryService {
         return reserver;
     }
 
-    private void record(Long tierId, Long orderId, int delta, InventoryLedgerEntry.Reason reason) {
+    private void writeLedger(Long tierId, Long orderId, int delta, InventoryLedgerEntry.Reason reason) {
         ledger.save(new InventoryLedgerEntry(tierId, orderId, delta, reason, Instant.now(clock)));
     }
 }

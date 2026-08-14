@@ -25,8 +25,11 @@ public class InventoryLedgerEntry {
 
     public enum Reason {
         RESERVE,
+        RESERVE_OFFER,
         RELEASE_CANCELLED,
         RELEASE_EXPIRED,
+        RELEASE_OFFER_EXPIRED,
+        RELEASE_OFFER_CANCELLED,
         RECONCILIATION
     }
 

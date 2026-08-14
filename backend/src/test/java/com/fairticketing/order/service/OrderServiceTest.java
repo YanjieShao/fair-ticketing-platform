@@ -16,6 +16,8 @@ import com.fairticketing.payment.domain.Payment;
 import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.payment.service.PaymentGateway;
 import com.fairticketing.waitingroom.service.WaitingRoomService;
+import com.fairticketing.waitlist.domain.WaitlistEntry;
+import com.fairticketing.waitlist.service.WaitlistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +60,7 @@ class OrderServiceTest {
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final OrderNumberGenerator orderNumbers = mock(OrderNumberGenerator.class);
     private final WaitingRoomService waitingRoom = mock(WaitingRoomService.class);
+    private final WaitlistService waitlist = mock(WaitlistService.class);
 
     private OrderService service;
 
@@ -66,9 +70,10 @@ class OrderServiceTest {
         when(orders.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
         when(orders.saveAndFlush(any(TicketOrder.class))).thenAnswer(call -> call.getArgument(0));
         when(inventory.tryReserve(anyLong(), anyInt())).thenReturn(true);
+        when(waitlist.consumeOffer(anyLong(), anyLong(), anyInt())).thenReturn(Optional.empty());
 
         service = new OrderService(
-                orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, properties(), clock);
+                orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, waitlist, properties(), clock);
     }
 
     @Nested
@@ -153,6 +158,23 @@ class OrderServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .extracting("code").isEqualTo(ErrorCode.WAITING_ROOM_TOKEN_REQUIRED);
             verify(inventory, never()).tryReserve(anyLong(), anyInt());
+        }
+
+        @Test
+        @DisplayName("a waitlist offer already holds the seats, so checkout must not take them again")
+        void converting_an_offer_skips_a_second_reserve() {
+            givenTier(EventStatus.SOLD_OUT);
+            WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 1, NOW);
+            entry.offer(NOW, NOW.plus(Duration.ofMinutes(15)));
+            when(waitlist.consumeOffer(USER_ID, TIER_ID, 2)).thenReturn(Optional.of(entry));
+
+            TicketOrder order = service.checkout(USER_ID, TIER_ID, 2, "key-1");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+            verify(inventory, never()).tryReserve(anyLong(), anyInt());
+            verify(inventory, never()).recordReservation(anyLong(), any(), anyInt());
+            verify(waitlist).markConverted(eq(entry), any());
+            verify(waitingRoom, never()).requireAdmission(anyLong(), anyLong());
         }
 
         @Test
@@ -243,6 +265,7 @@ class OrderServiceTest {
             assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
             assertThat(result.getActiveLockKey()).isNull();
             verify(inventory).release(eq(TIER_ID), eq(2), any(), eq(InventoryLedgerEntry.Reason.RELEASE_CANCELLED));
+            verify(waitlist).offerHead(TIER_ID);
         }
 
         @Test
@@ -254,6 +277,7 @@ class OrderServiceTest {
             assertThat(service.expireOverdueOrders()).isEqualTo(2);
             assertThat(first.getStatus()).isEqualTo(OrderStatus.EXPIRED);
             assertThat(second.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+            verify(waitlist, times(2)).offerHead(TIER_ID);
         }
     }
 
