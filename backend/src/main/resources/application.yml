@@ -59,6 +59,10 @@ ticketing:
     access-token-ttl: PT2H
   cors:
     allowed-origins: ${FT_CORS_ORIGINS:http://localhost:5173}
+  ml:
+    base-url: ${FT_ML_BASE_URL:http://localhost:8090}
+    timeout: PT3S
+    run-on-startup: ${FT_FORECAST_ON_START:false}
   seed:
     enabled: ${FT_SEED_ENABLED:false}
     artists: 40

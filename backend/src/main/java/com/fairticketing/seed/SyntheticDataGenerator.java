@@ -97,6 +97,7 @@ public class SyntheticDataGenerator implements ApplicationRunner {
         List<Long> artistIds = insertArtists(config.artists(), random);
         List<Long> venueIds = insertVenues(config.venues(), random);
         List<Long> buyerIds = insertBuyers(config.buyers(), now);
+        insertAdmin(now);
 
         List<EventRow> events = buildEvents(config, artistIds, venueIds, random, now);
         insertEvents(events);
@@ -188,6 +189,17 @@ public class SyntheticDataGenerator implements ApplicationRunner {
                     }
                 });
         return jdbc.queryForList("select id from users order by id", Long.class);
+    }
+
+    private void insertAdmin(Instant now) {
+        jdbc.update("""
+                        insert into users (email, password_hash, display_name, role, created_at)
+                        values (?, ?, ?, 'ADMIN', ?)
+                        """,
+                "admin@fairticketing.local",
+                passwordEncoder.encode("password123"),
+                "Admin",
+                utc(now));
     }
 
     private List<EventRow> buildEvents(TicketingProperties.Seed config,

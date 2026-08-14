@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -152,7 +153,7 @@ class OrderServiceTest {
         void rejects_checkout_without_a_waiting_room_pass() {
             givenTier(EventStatus.ON_SALE);
             doThrow(new BusinessException(ErrorCode.WAITING_ROOM_TOKEN_REQUIRED, "Join the waiting room"))
-                    .when(waitingRoom).requireAdmission(EVENT_ID, USER_ID);
+                    .when(waitingRoom).requireAdmission(EVENT_ID, USER_ID, true);
 
             assertThatThrownBy(() -> service.checkout(USER_ID, TIER_ID, 1, "key-1"))
                     .isInstanceOf(BusinessException.class)
@@ -174,7 +175,7 @@ class OrderServiceTest {
             verify(inventory, never()).tryReserve(anyLong(), anyInt());
             verify(inventory, never()).recordReservation(anyLong(), any(), anyInt());
             verify(waitlist).markConverted(eq(entry), any());
-            verify(waitingRoom, never()).requireAdmission(anyLong(), anyLong());
+            verify(waitingRoom, never()).requireAdmission(anyLong(), anyLong(), anyBoolean());
         }
 
         @Test
@@ -282,12 +283,16 @@ class OrderServiceTest {
     }
 
     private void givenTier(EventStatus status) {
-        givenTier(status, NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(30)));
+        givenTier(status, NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(30)), status == EventStatus.ON_SALE);
     }
 
     private void givenTier(EventStatus status, Instant salesStartAt, Instant salesEndAt) {
+        givenTier(status, salesStartAt, salesEndAt, false);
+    }
+
+    private void givenTier(EventStatus status, Instant salesStartAt, Instant salesEndAt, boolean waitingRoomEnabled) {
         when(tiers.findPurchaseView(TIER_ID)).thenReturn(Optional.of(
-                new TierPurchaseView(TIER_ID, EVENT_ID, 5_000, 4, status, salesStartAt, salesEndAt)));
+                new TierPurchaseView(TIER_ID, EVENT_ID, 5_000, 4, status, salesStartAt, salesEndAt, waitingRoomEnabled)));
     }
 
     private TicketOrder anOrder(OrderStatus status) {
@@ -312,6 +317,7 @@ class OrderServiceTest {
                 new TicketingProperties.Payment(0.0),
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
                 new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L),
-                new TicketingProperties.Cors(List.of("http://localhost:5173")));
+                new TicketingProperties.Cors(List.of("http://localhost:5173")),
+                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false));
     }
 }

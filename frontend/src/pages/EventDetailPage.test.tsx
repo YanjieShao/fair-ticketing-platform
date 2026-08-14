@@ -22,6 +22,7 @@ const show: EventDetail = {
   salesStartAt: '2026-08-01T09:00:00Z',
   salesEndAt: '2026-09-30T21:00:00Z',
   waitingRoomEnabled: false,
+  forecast: null,
   tiers: [
     {
       id: 11,

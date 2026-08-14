@@ -2,6 +2,7 @@ package com.fairticketing.waitingroom.web;
 
 import com.fairticketing.common.error.BusinessException;
 import com.fairticketing.common.error.ErrorCode;
+import com.fairticketing.event.domain.Event;
 import com.fairticketing.event.repository.EventRepository;
 import com.fairticketing.waitingroom.domain.WaitingRoomStatus;
 import com.fairticketing.waitingroom.service.WaitingRoomService;
@@ -36,8 +37,8 @@ public class WaitingRoomController {
 
     @PostMapping("/{eventId}/join")
     public WaitingRoomResponse join(@AuthenticationPrincipal Jwt jwt, @PathVariable Long eventId) {
-        requireEvent(eventId);
-        if (!waitingRoom.enabled()) {
+        Event event = requireEvent(eventId);
+        if (!waitingRoom.enabled() || !event.isWaitingRoomEnabled()) {
             return openDoor(eventId);
         }
         return WaitingRoomResponse.from(eventId, waitingRoom.join(eventId, userId(jwt)));
@@ -49,8 +50,8 @@ public class WaitingRoomController {
      */
     @GetMapping("/{eventId}")
     public WaitingRoomResponse status(@AuthenticationPrincipal Jwt jwt, @PathVariable Long eventId) {
-        requireEvent(eventId);
-        if (!waitingRoom.enabled()) {
+        Event event = requireEvent(eventId);
+        if (!waitingRoom.enabled() || !event.isWaitingRoomEnabled()) {
             return openDoor(eventId);
         }
         return WaitingRoomResponse.from(eventId, waitingRoom.status(eventId, userId(jwt)));
@@ -70,10 +71,9 @@ public class WaitingRoomController {
         return new WaitingRoomResponse(eventId, WaitingRoomStatus.ADMITTED, 0, 0, Duration.ZERO.toSeconds(), null);
     }
 
-    private void requireEvent(Long eventId) {
-        if (!events.existsById(eventId)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "Event " + eventId + " not found");
-        }
+    private Event requireEvent(Long eventId) {
+        return events.findById(eventId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Event " + eventId + " not found"));
     }
 
     private static Long userId(Jwt jwt) {

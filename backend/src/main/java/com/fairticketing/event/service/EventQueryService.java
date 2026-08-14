@@ -1,5 +1,7 @@
 package com.fairticketing.event.service;
 
+import com.fairticketing.ai.domain.DemandForecast;
+import com.fairticketing.ai.repository.DemandForecastRepository;
 import com.fairticketing.common.error.BusinessException;
 import com.fairticketing.common.error.ErrorCode;
 import com.fairticketing.event.domain.Event;
@@ -11,6 +13,7 @@ import com.fairticketing.event.web.EventSummaryResponse;
 import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.TicketTierRepository;
 import com.fairticketing.inventory.service.InventoryService;
+import com.fairticketing.waitingroom.service.WaitingRoomService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -32,11 +35,19 @@ public class EventQueryService {
     private final EventRepository events;
     private final TicketTierRepository tiers;
     private final InventoryService inventory;
+    private final DemandForecastRepository forecasts;
+    private final WaitingRoomService waitingRoom;
 
-    public EventQueryService(EventRepository events, TicketTierRepository tiers, InventoryService inventory) {
+    public EventQueryService(EventRepository events,
+                             TicketTierRepository tiers,
+                             InventoryService inventory,
+                             DemandForecastRepository forecasts,
+                             WaitingRoomService waitingRoom) {
         this.events = events;
         this.tiers = tiers;
         this.inventory = inventory;
+        this.forecasts = forecasts;
+        this.waitingRoom = waitingRoom;
     }
 
     @Transactional(readOnly = true)
@@ -67,7 +78,9 @@ public class EventQueryService {
         Map<Long, Availability> availability = availabilityFor(page.getContent());
 
         return page.map(event -> EventSummaryResponse.from(
-                event, availability.getOrDefault(event.getId(), Availability.NONE)));
+                event,
+                availability.getOrDefault(event.getId(), Availability.NONE),
+                queueIsLive(event)));
     }
 
     @Transactional(readOnly = true)
@@ -81,7 +94,24 @@ public class EventQueryService {
         Map<Long, Integer> remaining = eventTiers.stream()
                 .collect(Collectors.toMap(TicketTier::getId, inventory::remaining));
 
-        return EventDetailResponse.from(event, eventTiers, remaining);
+        EventDetailResponse.ForecastView forecast = forecasts.findFirstByEventIdOrderByGeneratedAtDesc(eventId)
+                .map(EventQueryService::toView)
+                .orElse(null);
+
+        return EventDetailResponse.from(event, eventTiers, remaining, forecast, queueIsLive(event));
+    }
+
+    private boolean queueIsLive(Event event) {
+        return waitingRoom.enabled() && event.isWaitingRoomEnabled();
+    }
+
+    private static EventDetailResponse.ForecastView toView(DemandForecast forecast) {
+        return new EventDetailResponse.ForecastView(
+                forecast.getExpectedDemand(),
+                forecast.getCapacity(),
+                forecast.getDemandRatio().doubleValue(),
+                forecast.getRiskLevel().name(),
+                forecast.getModelVersion());
     }
 
     private Map<Long, Availability> availabilityFor(List<Event> page) {

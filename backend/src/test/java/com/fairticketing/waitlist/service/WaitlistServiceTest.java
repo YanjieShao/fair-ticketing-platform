@@ -147,7 +147,7 @@ class WaitlistServiceTest {
     private void givenTier(EventStatus status) {
         when(tiers.findPurchaseView(TIER_ID)).thenReturn(Optional.of(
                 new TierPurchaseView(TIER_ID, EVENT_ID, 5_000, 4, status,
-                        NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(30)))));
+                        NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(30)), false)));
     }
 
     private static TicketingProperties properties() {
@@ -159,6 +159,7 @@ class WaitlistServiceTest {
                 new TicketingProperties.Payment(0.0),
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
                 new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L),
-                new TicketingProperties.Cors(List.of("http://localhost:5173")));
+                new TicketingProperties.Cors(List.of("http://localhost:5173")),
+                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false));
     }
 }

@@ -24,13 +24,16 @@ A buyer can browse events, join a waiting room, hold tickets, pay, and cancel
 from the React UI. Unpaid holds are returned automatically. Three inventory
 strategies sit behind the same interface and must each pass the same concurrency
 test. Cancelled and expired tickets are offered to the waitlist in join order.
-The forecasting service is not built yet.
+A scheduled job forecasts demand for upcoming shows and turns the waiting room
+on when expected demand exceeds capacity. LLM insights and waitlist
+recommendations are not built yet.
 
 ## Requirements
 
 - Java 21
 - Maven 3.9+ (or the wrapper in `backend/`)
 - Node 22+ (for the UI)
+- Python 3.12+ (for the demand model; Anaconda 3.12 on this machine)
 - Docker (Colima, Docker Desktop, or any engine Testcontainers can reach)
 
 ## Running
@@ -53,6 +56,29 @@ npm run dev
 ```
 
 The Vite server at http://localhost:5173 proxies `/api` to the backend on 8080.
+
+The demand model is a separate process. After seeding, run it and ask the
+backend to score upcoming shows:
+
+```bash
+cd ml-service
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8090
+```
+
+Then, with the backend already running on seeded data:
+
+```bash
+export FT_FORECAST_ON_START=true
+# or POST /api/admin/forecasts/run as admin@fairticketing.local / password123
+```
+
+To see the waiting room actually gate checkout, also set
+`FT_WAITING_ROOM_ENABLED=true`. The forecast decides which events use it; the
+global switch is the load-test kill switch.
+
 If more than one JDK is installed, point Maven at 21. On this machine that is:
 
 ```bash
@@ -76,6 +102,13 @@ The UI tests run in Vitest and do not need the backend:
 ```bash
 cd frontend
 npm test
+```
+
+The model service:
+
+```bash
+cd ml-service
+pytest
 ```
 
 Tests named `*IT` start a real MySQL and Redis through Testcontainers and run
@@ -103,7 +136,8 @@ in line rather than whoever hits checkout first.
 | --- | --- | --- | --- |
 | POST | `/api/auth/register`, `/api/auth/login` | none | obtain a token |
 | GET | `/api/events` | none | search by city, artist, category, date, price |
-| GET | `/api/events/{id}` | none | tiers and remaining stock |
+| GET | `/api/events/{id}` | none | tiers, remaining stock, latest demand forecast |
+| POST | `/api/admin/forecasts/run` | admin | score upcoming shows and open waiting rooms |
 | POST | `/api/waiting-room/{eventId}/join` | buyer | take a place in line |
 | GET | `/api/waiting-room/{eventId}` | buyer | position; polling is what moves the line |
 | DELETE | `/api/waiting-room/{eventId}` | buyer | give up a place |
@@ -147,6 +181,8 @@ other than your laptop.
 | `FT_PAYMENT_FAILURE_RATE` | `0.0` | forces declined payments for demos |
 | `FT_SEED_ENABLED` | `false` | generates the synthetic sales history |
 | `FT_CORS_ORIGINS` | `http://localhost:5173` | browser origins allowed to call the API directly |
+| `FT_ML_BASE_URL` | `http://localhost:8090` | Python demand model |
+| `FT_FORECAST_ON_START` | `false` | run a forecast pass when the backend boots |
 
 ## Seed data
 
@@ -239,7 +275,8 @@ sleeping.
 
 Demand forecasting runs as a scheduled batch job that writes to
 `demand_forecasts`. Request handling only reads that table, so the Python
-service being slow or down cannot affect checkout.
+service being slow or down cannot affect checkout. A HIGH forecast is what
+turns `waiting_room_enabled` on for that event.
 
 ## Load test targets
 

@@ -60,7 +60,16 @@ export type EventDetail = {
   salesStartAt: string
   salesEndAt: string
   waitingRoomEnabled: boolean
+  forecast: DemandForecast | null
   tiers: TicketTier[]
+}
+
+export type DemandForecast = {
+  expectedDemand: number
+  capacity: number
+  demandRatio: number
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+  modelVersion: string
 }
 
 export type TokenResponse = {

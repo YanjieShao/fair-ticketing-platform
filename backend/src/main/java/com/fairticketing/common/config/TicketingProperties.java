@@ -14,7 +14,8 @@ public record TicketingProperties(
         Payment payment,
         Security security,
         Seed seed,
-        Cors cors
+        Cors cors,
+        Ml ml
 ) {
 
     /**
@@ -76,6 +77,13 @@ public record TicketingProperties(
     }
 
     public record Cors(List<String> allowedOrigins) {
+    }
+
+    /**
+     * The Python model lives off the checkout path. {@code runOnStartup} is for
+     * local demos after seeding; the hourly job is what production uses.
+     */
+    public record Ml(String baseUrl, Duration timeout, boolean runOnStartup) {
     }
 
     /**

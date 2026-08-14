@@ -23,7 +23,16 @@ public record EventDetailResponse(
         Instant salesStartAt,
         Instant salesEndAt,
         boolean waitingRoomEnabled,
+        ForecastView forecast,
         List<TierView> tiers) {
+
+    public record ForecastView(
+            int expectedDemand,
+            int capacity,
+            double demandRatio,
+            String riskLevel,
+            String modelVersion) {
+    }
 
     public record TierView(
             Long id,
@@ -48,7 +57,11 @@ public record EventDetailResponse(
         }
     }
 
-    public static EventDetailResponse from(Event event, List<TicketTier> tiers, Map<Long, Integer> remaining) {
+    public static EventDetailResponse from(Event event,
+                                           List<TicketTier> tiers,
+                                           Map<Long, Integer> remaining,
+                                           ForecastView forecast,
+                                           boolean waitingRoomEnabled) {
         return new EventDetailResponse(
                 event.getId(),
                 event.getTitle(),
@@ -63,7 +76,8 @@ public record EventDetailResponse(
                 event.getStartsAt(),
                 event.getSalesStartAt(),
                 event.getSalesEndAt(),
-                event.isWaitingRoomEnabled(),
+                waitingRoomEnabled,
+                forecast,
                 tiers.stream()
                         .map(tier -> TierView.from(tier, remaining.getOrDefault(tier.getId(), tier.availableQuantity())))
                         .toList());

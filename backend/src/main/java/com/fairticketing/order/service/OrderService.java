@@ -92,7 +92,7 @@ public class OrderService {
 
         if (!fromWaitlist) {
             requireOnSale(tier);
-            waitingRoom.requireAdmission(tier.eventId(), userId);
+            waitingRoom.requireAdmission(tier.eventId(), userId, tier.waitingRoomEnabled());
         } else if (Instant.now(clock).isAfter(tier.salesEndAt())) {
             throw new BusinessException(ErrorCode.EVENT_NOT_ON_SALE, "This event is outside its sales window");
         }

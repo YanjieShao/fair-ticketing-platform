@@ -22,7 +22,7 @@ public record EventSummaryResponse(
         int ticketsAvailable,
         int lowestPriceCents) {
 
-    public static EventSummaryResponse from(Event event, Availability availability) {
+    public static EventSummaryResponse from(Event event, Availability availability, boolean waitingRoomEnabled) {
         return new EventSummaryResponse(
                 event.getId(),
                 event.getTitle(),
@@ -35,7 +35,7 @@ public record EventSummaryResponse(
                 event.getStatus(),
                 event.getStartsAt(),
                 event.getSalesStartAt(),
-                event.isWaitingRoomEnabled(),
+                waitingRoomEnabled,
                 availability.ticketsAvailable(),
                 availability.lowestPriceCents());
     }

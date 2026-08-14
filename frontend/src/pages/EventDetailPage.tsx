@@ -90,6 +90,12 @@ export function EventDetailPage() {
         <StatusChip>{show.status}</StatusChip>
         {show.waitingRoomEnabled ? ' Waiting room is on for this sale.' : null}
       </p>
+      {show.forecast ? (
+        <p>
+          Forecast: {show.forecast.expectedDemand.toLocaleString('en-IE')} expected against a house of{' '}
+          {show.forecast.capacity.toLocaleString('en-IE')} ({show.forecast.riskLevel}).
+        </p>
+      ) : null}
 
       <ApiErrorBanner error={checkout.error} />
       <ApiErrorBanner error={joinWaitlist.error} />

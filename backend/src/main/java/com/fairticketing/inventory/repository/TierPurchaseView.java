@@ -18,5 +18,6 @@ public record TierPurchaseView(
         int maxPerUser,
         EventStatus eventStatus,
         Instant salesStartAt,
-        Instant salesEndAt) {
+        Instant salesEndAt,
+        boolean waitingRoomEnabled) {
 }

@@ -21,7 +21,7 @@ public interface TicketTierRepository extends JpaRepository<TicketTier, Long> {
     @Query("""
             select new com.fairticketing.inventory.repository.TierPurchaseView(
                        t.id, e.id, t.priceCents, t.maxPerUser,
-                       e.status, e.salesStartAt, e.salesEndAt)
+                       e.status, e.salesStartAt, e.salesEndAt, e.waitingRoomEnabled)
               from TicketTier t
               join t.event e
              where t.id = :id

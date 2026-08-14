@@ -72,9 +72,12 @@ public class WaitingRoomService {
     /**
      * The gate the checkout calls. Read-only on purpose: buying should not be
      * able to admit anybody, including the buyer making the request.
+     *
+     * <p>{@code enabled()} is the load-test kill switch. The per-event flag is
+     * what the demand forecast turns on for oversubscribed shows.
      */
-    public void requireAdmission(Long eventId, Long userId) {
-        if (!enabled() || admitted(eventId, userId)) {
+    public void requireAdmission(Long eventId, Long userId, boolean eventRequiresQueue) {
+        if (!enabled() || !eventRequiresQueue || admitted(eventId, userId)) {
             return;
         }
         throw new BusinessException(ErrorCode.WAITING_ROOM_TOKEN_REQUIRED,
