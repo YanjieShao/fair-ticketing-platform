@@ -15,6 +15,7 @@ import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.payment.service.PaymentGateway;
 import com.fairticketing.waitingroom.service.WaitingRoomService;
 import com.fairticketing.waitlist.service.WaitlistService;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,6 +44,7 @@ public class OrderService {
     private final WaitlistService waitlist;
     private final TicketingProperties properties;
     private final Clock clock;
+    private final EntityManager entityManager;
 
     public OrderService(TicketOrderRepository orders,
                         TicketTierRepository tiers,
@@ -53,7 +55,8 @@ public class OrderService {
                         WaitingRoomService waitingRoom,
                         WaitlistService waitlist,
                         TicketingProperties properties,
-                        Clock clock) {
+                        Clock clock,
+                        EntityManager entityManager) {
         this.orders = orders;
         this.tiers = tiers;
         this.inventory = inventory;
@@ -64,6 +67,7 @@ public class OrderService {
         this.waitlist = waitlist;
         this.properties = properties;
         this.clock = clock;
+        this.entityManager = entityManager;
     }
 
     /**
@@ -117,9 +121,22 @@ public class OrderService {
         try {
             orders.saveAndFlush(order);
         } catch (DataIntegrityViolationException ex) {
-            // The unique index on active_lock_key is the real enforcement point
-            // for "one live order per user per event"; rolling back returns the
-            // stock we just took.
+            // Hibernate keeps the failed insert in the persistence context with
+            // a null id. Any later query auto-flushes it and throws 500. Drop
+            // that entry before touching inventory or re-reading the winner.
+            entityManager.clear();
+            // Redis already decremented; a rollback does not give that ticket
+            // back. Database strategies undo the decrement when this
+            // transaction rolls back, and the matching release is a no-op.
+            if (!fromWaitlist) {
+                inventory.release(tierId, quantity, null, InventoryLedgerEntry.Reason.RELEASE_ABORTED);
+            }
+            String detail = integrityDetail(ex);
+            if (detail.contains("uk_orders_idempotency")) {
+                return orders.findByIdempotencyKey(idempotencyKey)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.DUPLICATE_ACTIVE_ORDER,
+                                "You already have an order in progress for this event"));
+            }
             throw new BusinessException(ErrorCode.DUPLICATE_ACTIVE_ORDER,
                     "You already have an order in progress for this event");
         }
@@ -226,5 +243,11 @@ public class OrderService {
             throw new BusinessException(ErrorCode.PURCHASE_LIMIT_EXCEEDED,
                     "You can buy at most " + limit + " tickets in this tier");
         }
+    }
+
+    private static String integrityDetail(DataIntegrityViolationException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+        String message = cause != null ? cause.getMessage() : ex.getMessage();
+        return message == null ? "" : message;
     }
 }

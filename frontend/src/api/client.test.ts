@@ -44,6 +44,27 @@ describe('api client', () => {
     })
   })
 
+  it('keeps RATE_LIMITED as a code the UI can show', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 429,
+        ok: false,
+        statusText: 'Too Many Requests',
+        text: async () => JSON.stringify({
+          code: 'RATE_LIMITED',
+          message: 'Too many requests from this account; wait a moment and retry',
+        }),
+      }),
+    )
+
+    await expect(api('/api/orders', { method: 'POST', body: '{}' })).rejects.toMatchObject({
+      name: 'ApiError',
+      code: 'RATE_LIMITED',
+      status: 429,
+    })
+  })
+
   it('drops a rejected token so the next request is anonymous', async () => {
     setToken('stale')
     vi.stubGlobal(

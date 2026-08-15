@@ -1,11 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
+import { RequireAdmin } from './auth/RequireAdmin'
 import { RequireAuth } from './auth/RequireAuth'
 import { Shell } from './layout/Shell'
+import { AdminCreateEventPage } from './pages/AdminCreateEventPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
+import { AdminInsightsPage } from './pages/AdminInsightsPage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { EventsPage } from './pages/EventsPage'
 import { LoginPage } from './pages/LoginPage'
+import { NotificationsPage } from './pages/NotificationsPage'
 import { OrderPage } from './pages/OrderPage'
 import { OrdersPage } from './pages/OrdersPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -59,6 +64,38 @@ export default function App() {
                   <RequireAuth>
                     <WaitlistPage />
                   </RequireAuth>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <RequireAuth>
+                    <NotificationsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <AdminDashboardPage />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/admin/events/new"
+                element={
+                  <RequireAdmin>
+                    <AdminCreateEventPage />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/admin/insights"
+                element={
+                  <RequireAdmin>
+                    <AdminInsightsPage />
+                  </RequireAdmin>
                 }
               />
               <Route path="*" element={<Navigate to="/" replace />} />

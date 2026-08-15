@@ -29,9 +29,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Duration;
 import java.time.Instant;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -167,6 +170,23 @@ class WaitingRoomCheckoutIT extends AbstractIntegrationTest {
                         .content(checkoutBody()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("WAITING_ROOM_TOKEN_REQUIRED"));
+    }
+
+    @Test
+    void the_stream_pushes_admission_without_the_client_polling() throws Exception {
+        http.perform(post("/api/waiting-room/" + eventId + "/join")
+                        .header("Authorization", "Bearer " + firstToken))
+                .andExpect(jsonPath("$.status").value("ADMITTED"));
+
+        var started = http.perform(get("/api/waiting-room/" + eventId + "/stream")
+                        .header("Authorization", "Bearer " + firstToken)
+                        .accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        started.getAsyncResult(5_000);
+        http.perform(asyncDispatch(started))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("ADMITTED")));
     }
 
     private String register(String email) throws Exception {

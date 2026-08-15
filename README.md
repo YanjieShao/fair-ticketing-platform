@@ -21,12 +21,21 @@ The name commits the system to three mechanisms, each of which is testable:
 ## Status
 
 A buyer can browse events, join a waiting room, hold tickets, pay, and cancel
-from the React UI. Unpaid holds are returned automatically. Three inventory
+from the React UI. Search covers artist, city, category, date, and price, and
+paginates. Unpaid holds are returned automatically. The waiting room
+UI listens on SSE and falls back to polling if the stream drops. Checkout, waitlist
+join, and waiting-room join are capped per account; a short burst from the
+same user is treated as anomalous and returns 429. Three inventory
 strategies sit behind the same interface and must each pass the same concurrency
 test. Cancelled and expired tickets are offered to the waitlist in join order.
-A scheduled job forecasts demand for upcoming shows and turns the waiting room
-on when expected demand exceeds capacity. LLM insights and waitlist
-recommendations are not built yet.
+Offers also land in the in-app inbox. A scheduled job forecasts demand for
+upcoming shows and turns the waiting room on when expected demand exceeds
+capacity. Another job turns those (and live sales) numbers into operator copy:
+the LLM only phrases figures the backend already computed, and a template is
+used when no API key is set. Sold-out shows recommend other on-sale events of
+the same genre; city and price only break ties. Admins get a sales dashboard of
+those same aggregates, plotted with Recharts, and can list a new show from the
+admin UI.
 
 ## Requirements
 
@@ -57,6 +66,10 @@ npm run dev
 
 The Vite server at http://localhost:5173 proxies `/api` to the backend on 8080.
 
+Sign in as `admin@fairticketing.local` / `password123` for the dashboard,
+or create a buyer account from the UI. The admin row is created on startup if
+it is missing.
+
 The demand model is a separate process. After seeding, run it and ask the
 backend to score upcoming shows:
 
@@ -73,6 +86,8 @@ Then, with the backend already running on seeded data:
 ```bash
 export FT_FORECAST_ON_START=true
 # or POST /api/admin/forecasts/run as admin@fairticketing.local / password123
+# Insights follow automatically on that same startup pass, or:
+# POST /api/admin/insights/run
 ```
 
 To see the waiting room actually gate checkout, also set
@@ -102,6 +117,15 @@ The UI tests run in Vitest and do not need the backend:
 ```bash
 cd frontend
 npm test
+```
+
+Playwright covers the buyer's main path (search, register, hold, pay). It
+expects MySQL, Redis, and the API on :8080, then starts Vite if needed:
+
+```bash
+cd frontend
+npx playwright install chromium   # once
+npm run e2e
 ```
 
 The model service:
@@ -136,10 +160,18 @@ in line rather than whoever hits checkout first.
 | --- | --- | --- | --- |
 | POST | `/api/auth/register`, `/api/auth/login` | none | obtain a token |
 | GET | `/api/events` | none | search by city, artist, category, date, price |
-| GET | `/api/events/{id}` | none | tiers, remaining stock, latest demand forecast |
-| POST | `/api/admin/forecasts/run` | admin | score upcoming shows and open waiting rooms |
+| GET | `/api/events/{id}` | none | tiers, remaining stock, latest demand forecast and sales insight |
+| GET | `/api/events/{id}/recommendations` | none | same-genre shows still on sale |
+| GET | `/api/notifications` | buyer | waitlist offers and sales briefs for this account |
+| GET | `/api/admin/dashboard` | admin | live sales, waitlist, order, and forecast totals |
+| POST | `/api/admin/events` | admin | create a show (draft or on sale) |
+| POST | `/api/admin/events/{id}/publish` | admin | DRAFT → ON_SALE |
+| POST | `/api/admin/events/{id}/cancel` | admin | take down a draft only |
+| GET | `/api/admin/insights` | admin | latest sales briefings |
+| POST | `/api/admin/insights/run` | admin | phrase live sales numbers (LLM or template) |
 | POST | `/api/waiting-room/{eventId}/join` | buyer | take a place in line |
-| GET | `/api/waiting-room/{eventId}` | buyer | position; polling is what moves the line |
+| GET | `/api/waiting-room/{eventId}` | buyer | position; still what moves the line if nobody is streaming |
+| GET | `/api/waiting-room/{eventId}/stream` | buyer | SSE of the same payload until admitted |
 | DELETE | `/api/waiting-room/{eventId}` | buyer | give up a place |
 | POST | `/api/waitlist` | buyer | join after a tier sells out |
 | GET | `/api/waitlist`, `/api/waitlist/{id}` | buyer | place in line and offer window |
@@ -183,6 +215,10 @@ other than your laptop.
 | `FT_CORS_ORIGINS` | `http://localhost:5173` | browser origins allowed to call the API directly |
 | `FT_ML_BASE_URL` | `http://localhost:8090` | Python demand model |
 | `FT_FORECAST_ON_START` | `false` | run a forecast pass when the backend boots |
+| `FT_INSIGHTS_ON_START` | `false` | run an insight pass when the backend boots |
+| `FT_LOADTEST_ENABLED` | `false` | local stampede fixture; never on a public process |
+| `FT_RATE_LIMIT_ENABLED` | `true` | per-account caps on checkout and join |
+| `OPENAI_API_KEY` | empty | optional; blank uses the template composer |
 
 ## Seed data
 
@@ -217,7 +253,7 @@ is the Python model service, because it is a different language runtime.
 
 ```
 backend/src/main/java/com/fairticketing/
-├── common/         cross-cutting: errors, clock, idempotency, rate limiting
+├── common/         cross-cutting: errors, clock, rate limiting
 ├── auth/           registration, login, JWT, roles
 ├── event/          artists, venues, events, search
 ├── inventory/      ticket tiers and stock, interchangeable reservers
@@ -228,8 +264,10 @@ backend/src/main/java/com/fairticketing/
 ├── analytics/      aggregates behind the dashboard
 ├── ai/             forecasting, insight generation, recommendations
 ├── notification/   transactional and insight-driven messages
-└── audit/          who did what, and when
 ```
+
+`audit_logs` exists in the schema for later, but there is no audit package in v1.
+Stock movements are already append-only in `inventory_ledger`.
 
 ### Inventory: three implementations, on purpose
 
@@ -259,6 +297,15 @@ Reserving before inserting makes every transaction take the contended row first,
 so buyers queue instead of colliding. The audit entry is written after the order
 exists; both happen in one transaction, so they cannot disagree.
 
+### Rate limits are per account, not per IP
+
+Checkout, waitlist join, and waiting-room join share a Redis counter keyed by
+user id. Defaults are 8 checkouts a minute, 20 joins a minute, and 5 of those
+writes in any 10 seconds. The short window is the anomaly detector: a script
+on one account trips 429 `RATE_LIMITED` before a person retrying a slow page
+would. Browse and waiting-room polling are not capped. The 10k stampede sends
+one request per buyer, so it does not hit this path.
+
 ### Every stock movement is written down
 
 `inventory_ledger` is append-only and records the reason for each change. Once
@@ -278,11 +325,39 @@ Demand forecasting runs as a scheduled batch job that writes to
 service being slow or down cannot affect checkout. A HIGH forecast is what
 turns `waiting_room_enabled` on for that event.
 
+Sales insights work the same way. The backend computes sold percent, hours on
+sale, and waitlist pressure; an LLM (or a template if `OPENAI_API_KEY` is
+blank) only writes the paragraph. The prompt forbids inventing numbers, and
+copy that does not cite the computed sold percent is discarded. Results land
+in `ai_insights` and are what the event page and admin Insights view read.
+
+Waitlist recommendations are content-based because a new platform has no
+purchase graph. Same genre is required; city, category, and price within 30%
+only rank the shortlist. The scorer is a plain Java class, and checkout never
+calls it.
+
+The admin dashboard is the same idea in a different shape: JDBC aggregates
+sell-through, waitlist pressure, paid revenue, order status, category mix, and
+the last 14 days of paid tickets. Recharts only draws those arrays.
+
+Prometheus and Grafana would graph *process* metrics (request rate, p99, JVM,
+MySQL) for operators. They are not the sales dashboard and stay optional — skip
+them unless you specifically want an ops console.
+
+Admins can also list a show from `/admin/events/new`. Only a draft can be
+taken down; once tickets are on sale, cancellation is out of scope. Buyers
+read waitlist offers from `/notifications` as well as the waitlist page.
+
 ## Load test targets
 
-| Metric | Target |
-| --- | --- |
-| Inventory | 30,000 tickets |
-| Concurrent buyers | 10,000 |
-| Oversold tickets | 0 |
-| Checkout p99 | < 200 ms |
+| Metric | Target | Measured (2026-08-14, this laptop) |
+| --- | --- | --- |
+| Inventory | 30,000 tickets | 30,000 on the headline run |
+| Concurrent buyers | 10,000 | 10,000 HTTP/1.1 stampede |
+| Oversold tickets | 0 | **0** on pessimistic, conditional, and Redis |
+| Checkout p99 | < 200 ms | **Not met** (tens of seconds on one hot row) |
+
+The 200 ms number is a target, not a result. A true 10k stampede against a
+single tier queues on one InnoDB row (or one Redis key plus inserts), so
+p99 tracks wall-clock. Zero oversell is the claim the harness actually
+supports. Method, knobs, and per-strategy tables: [docs/load-test.md](docs/load-test.md).

@@ -25,6 +25,7 @@ export type EventSummary = {
   venueName: string
   city: string
   country: string
+  timezone: string
   category: string
   status: EventStatus
   startsAt: string
@@ -61,7 +62,23 @@ export type EventDetail = {
   salesEndAt: string
   waitingRoomEnabled: boolean
   forecast: DemandForecast | null
+  insight: SalesInsight | null
   tiers: TicketTier[]
+}
+
+export type SalesInsight = {
+  content: string
+  generatedBy: 'LLM' | 'TEMPLATE' | string
+  createdAt: string
+}
+
+export type AdminInsight = {
+  id: number
+  eventId: number
+  content: string
+  generatedBy: string
+  createdAt: string
+  payloadJson: string | null
 }
 
 export type DemandForecast = {
@@ -112,4 +129,67 @@ export type WaitingRoom = {
   queueLength: number
   estimatedWaitSeconds: number
   admissionExpiresAt: string | null
+}
+
+export type Recommendation = {
+  id: number
+  title: string
+  artistName: string
+  genre: string
+  city: string
+  status: EventStatus
+  ticketsAvailable: number
+  lowestPriceCents: number
+  score: number
+  reasons: string[]
+}
+
+export type AdminDashboard = {
+  kpis: {
+    eventsOnSale: number
+    eventsSoldOut: number
+    capacity: number
+    reserved: number
+    remaining: number
+    sellThroughPercent: number
+    waitlistPeople: number
+    waitlistTickets: number
+    paidOrders: number
+    paidTickets: number
+    paidCents: number
+  }
+  orderStatus: NamedCount[]
+  forecastRisk: NamedCount[]
+  categories: { category: string; reserved: number; heldCents: number }[]
+  salesTrend: { day: string; orders: number; tickets: number; cents: number }[]
+  hotEvents: {
+    eventId: number
+    title: string
+    artistName: string
+    status: EventStatus
+    soldPercent: number
+    reserved: number
+    remaining: number
+    waitlistPeople: number
+    waitlistTickets: number
+    waitlistVsRemainingPercent: number | null
+    demandRisk: string | null
+  }[]
+}
+
+export type NotificationItem = {
+  id: number
+  type: string
+  title: string
+  body: string
+  sourceType: string
+  generatedBy: string
+  createdAt: string
+}
+
+export type NamedCount = {
+  name: string
+  count: number
+  tickets: number
+  cents: number
 }

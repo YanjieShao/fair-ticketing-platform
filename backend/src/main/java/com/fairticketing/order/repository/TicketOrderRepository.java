@@ -24,6 +24,8 @@ public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> 
 
     Page<TicketOrder> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
+    long countByTierId(Long tierId);
+
     @Query("""
             select o from TicketOrder o
              where o.status in :statuses

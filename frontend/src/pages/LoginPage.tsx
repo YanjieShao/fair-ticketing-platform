@@ -47,6 +47,7 @@ export function LoginPage() {
       <p>
         New here? <Link to="/register">Create an account</Link>
       </p>
+      <p className="muted">Demo operator: admin@fairticketing.local / password123</p>
     </section>
   )
 }

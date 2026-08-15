@@ -48,8 +48,10 @@ public class InventoryService {
      * order row cannot be inserted without first taking a shared lock on the
      * tier it references.
      *
-     * <p>The pair cannot drift apart because both run inside the checkout
-     * transaction, so anything that skips the second call rolls back the first.
+     * <p>Database strategies hold the decrement in the same transaction as the
+     * order insert, so a rollback undoes both. Redis decrements immediately,
+     * so a failed insert has to call {@link #release} explicitly or the
+     * counter leaks.
      */
     public boolean tryReserve(Long tierId, int quantity) {
         return active().tryReserve(tierId, quantity);

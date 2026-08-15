@@ -15,7 +15,10 @@ public record TicketingProperties(
         Security security,
         Seed seed,
         Cors cors,
-        Ml ml
+        Ml ml,
+        Llm llm,
+        LoadTest loadTest,
+        RateLimit rateLimit
 ) {
 
     /**
@@ -84,6 +87,35 @@ public record TicketingProperties(
      * local demos after seeding; the hourly job is what production uses.
      */
     public record Ml(String baseUrl, Duration timeout, boolean runOnStartup) {
+    }
+
+    /**
+     * Phrases numbers the backend already computed. Blank {@code apiKey} skips
+     * the network call and uses the template composer.
+     */
+    public record Llm(String apiKey, String baseUrl, String model, Duration timeout, boolean runOnStartup) {
+    }
+
+    /**
+     * Local stampede fixture. Off by default; never enable anywhere public.
+     */
+    public record LoadTest(boolean enabled) {
+    }
+
+    /**
+     * Per-account caps on the hot write paths. The 10k stampede uses one
+     * request per buyer, so these do not change oversell measurements.
+     *
+     * @param enabled              kill switch for tests
+     * @param checkoutPerMinute    POST /api/orders from one user
+     * @param joinPerMinute        waiting-room join and waitlist join
+     * @param burstPerTenSeconds   same-account spike across those paths; this is
+     *                             the anomaly detector, not a second product
+     */
+    public record RateLimit(boolean enabled,
+                            int checkoutPerMinute,
+                            int joinPerMinute,
+                            int burstPerTenSeconds) {
     }
 
     /**

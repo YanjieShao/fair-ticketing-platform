@@ -160,6 +160,9 @@ class WaitlistServiceTest {
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
                 new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L),
                 new TicketingProperties.Cors(List.of("http://localhost:5173")),
-                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false));
+                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false),
+                new TicketingProperties.Llm("", "http://127.0.0.1:9", "gpt-4o-mini", Duration.ofSeconds(1), false),
+                new TicketingProperties.LoadTest(false),
+                new TicketingProperties.RateLimit(false, 8, 20, 5));
     }
 }

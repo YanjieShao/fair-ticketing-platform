@@ -1,0 +1,76 @@
+=== STRATEGY REDIS_LUA ===
+--- smoke ---
+=== load-test smoke (500 buyers, 100 tickets) against http://localhost:8080 ===
+profile: buyers=500 stock=100
+wall_ms: 2278
+http_201: 100
+http_statuses: {201=100, 409=400}
+business_codes: {SOLD_OUT=400}
+latency_ms_p50: 1414
+latency_ms_p95: 2103
+latency_ms_p99: 2143
+latency_ms_max: 2186
+result: {"tierId":516,"total":100,"reserved":0,"remaining":0,"orderCount":100,"oversold":false}
+zero_oversell: true
+expected_sold: 100
+p99_under_200ms: false
+--- contention ---
+=== load-test contention (10000 buyers, 3000 tickets) against http://localhost:8080 ===
+profile: buyers=10000 stock=3000
+wall_ms: 14216
+http_201: 2988
+http_statuses: {201=2988, 409=6976}
+business_codes: {IOException=2, SOLD_OUT=6964, ConnectException=34, DUPLICATE_ACTIVE_ORDER=12}
+latency_ms_p50: 8852
+latency_ms_p95: 12859
+latency_ms_p99: 13169
+latency_ms_max: 13758
+result: {"tierId":517,"total":3000,"reserved":0,"remaining":0,"orderCount":2988,"oversold":false}
+zero_oversell: true
+expected_sold: 3000
+p99_under_200ms: false
+--- target ---
+=== load-test target (10000 buyers, 30000 tickets) against http://localhost:8080 ===
+profile: buyers=10000 stock=30000
+wall_ms: 7710
+http_201: 2831
+http_statuses: {201=2831, 409=12}
+business_codes: {IOException=7142, ConnectException=15, DUPLICATE_ACTIVE_ORDER=12}
+latency_ms_p50: 4419
+latency_ms_p95: 6688
+latency_ms_p99: 6967
+latency_ms_max: 7174
+result: {"tierId":518,"total":30000,"reserved":0,"remaining":27157,"orderCount":2831,"oversold":false}
+zero_oversell: true
+expected_sold: 10000
+p99_under_200ms: false
+--- target (retry after 45s drain) ---
+=== load-test target (10000 buyers, 30000 tickets) against http://localhost:8080 ===
+profile: buyers=10000 stock=30000
+wall_ms: 15955
+http_201: 9644
+http_statuses: {201=9644, 409=26}
+business_codes: {ConnectException=330, DUPLICATE_ACTIVE_ORDER=26}
+latency_ms_p50: 8659
+latency_ms_p95: 14035
+latency_ms_p99: 14557
+latency_ms_max: 15019
+result: {"tierId":519,"total":30000,"reserved":0,"remaining":20330,"orderCount":9644,"oversold":false}
+zero_oversell: true
+expected_sold: 10000
+p99_under_200ms: false
+--- target (retry after 60s drain) ---
+=== load-test target (10000 buyers, 30000 tickets) against http://localhost:8080 ===
+profile: buyers=10000 stock=30000
+wall_ms: 16575
+http_201: 9795
+http_statuses: {201=9795, 409=24}
+business_codes: {IOException=56, ConnectException=125, DUPLICATE_ACTIVE_ORDER=24}
+latency_ms_p50: 9326
+latency_ms_p95: 15109
+latency_ms_p99: 15546
+latency_ms_max: 16562
+result: {"tierId":520,"total":30000,"reserved":0,"remaining":20181,"orderCount":9795,"oversold":false}
+zero_oversell: true
+expected_sold: 10000
+p99_under_200ms: false

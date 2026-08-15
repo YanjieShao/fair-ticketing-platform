@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.random.RandomGenerator;
 
 /**
@@ -23,20 +24,22 @@ public class OrderNumberGenerator {
 
     @Autowired
     public OrderNumberGenerator(Clock clock) {
-        this(clock, RandomGenerator.getDefault());
+        this(clock, null);
     }
 
-    /** Lets tests pin the random source. */
+    /** Lets tests pin the random source. Production uses {@link ThreadLocalRandom}
+     * inside {@link #next()} so virtual threads do not share one generator. */
     OrderNumberGenerator(Clock clock, RandomGenerator random) {
         this.clock = clock;
         this.random = random;
     }
 
     public String next() {
+        RandomGenerator rng = random != null ? random : ThreadLocalRandom.current();
         LocalDate today = LocalDate.now(clock);
         StringBuilder suffix = new StringBuilder(SUFFIX_LENGTH);
         for (int i = 0; i < SUFFIX_LENGTH; i++) {
-            suffix.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));
+            suffix.append(ALPHABET.charAt(rng.nextInt(ALPHABET.length())));
         }
         return "FT%04d%02d%02d%s".formatted(
                 today.getYear(), today.getMonthValue(), today.getDayOfMonth(), suffix);

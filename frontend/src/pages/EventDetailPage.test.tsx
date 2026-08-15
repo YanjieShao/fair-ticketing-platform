@@ -23,6 +23,7 @@ const show: EventDetail = {
   salesEndAt: '2026-09-30T21:00:00Z',
   waitingRoomEnabled: false,
   forecast: null,
+  insight: null,
   tiers: [
     {
       id: 11,
@@ -85,6 +86,9 @@ describe('EventDetailPage', () => {
           text: async () => JSON.stringify(show),
         }
       }
+      if (url === '/api/events/1/recommendations') {
+        return { status: 200, ok: true, text: async () => JSON.stringify([]) }
+      }
       if (url === '/api/orders') {
         return {
           status: 201,
@@ -131,6 +135,9 @@ describe('EventDetailPage', () => {
         if (url === '/api/events/1') {
           return { status: 200, ok: true, text: async () => JSON.stringify(show) }
         }
+        if (url === '/api/events/1/recommendations') {
+          return { status: 200, ok: true, text: async () => JSON.stringify([]) }
+        }
         if (url === '/api/waitlist') {
           return {
             status: 201,
@@ -160,5 +167,41 @@ describe('EventDetailPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Join waitlist' }))
     expect(await screen.findByText('On the waitlist')).toBeInTheDocument()
+  })
+
+  it('shows a persisted sales insight without calling the LLM from the page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/events/1') {
+          return {
+            status: 200,
+            ok: true,
+            text: async () =>
+              JSON.stringify({
+                ...show,
+                insight: {
+                  content: 'Reached 92% of 10000 tickets in 3 hours; waitlist is 180% of remaining stock.',
+                  generatedBy: 'TEMPLATE',
+                  createdAt: '2026-08-14T12:00:00Z',
+                },
+              }),
+          }
+        }
+        if (String(input) === '/api/events/1/recommendations') {
+          return { status: 200, ok: true, text: async () => JSON.stringify([]) }
+        }
+        throw new Error(`unexpected ${String(input)}`)
+      }),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(
+        'Reached 92% of 10000 tickets in 3 hours; waitlist is 180% of remaining stock.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/TEMPLATE/)).toBeInTheDocument()
   })
 })

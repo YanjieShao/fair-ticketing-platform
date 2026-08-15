@@ -11,6 +11,10 @@ target/
 node_modules/
 dist/
 .vite/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 __pycache__/
 .venv/

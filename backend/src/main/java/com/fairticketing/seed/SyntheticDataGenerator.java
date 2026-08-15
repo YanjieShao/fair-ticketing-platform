@@ -192,6 +192,11 @@ public class SyntheticDataGenerator implements ApplicationRunner {
     }
 
     private void insertAdmin(Instant now) {
+        Integer exists = jdbc.queryForObject(
+                "select count(*) from users where email = ?", Integer.class, "admin@fairticketing.local");
+        if (exists != null && exists > 0) {
+            return;
+        }
         jdbc.update("""
                         insert into users (email, password_hash, display_name, role, created_at)
                         values (?, ?, ?, 'ADMIN', ?)

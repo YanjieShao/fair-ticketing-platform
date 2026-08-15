@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.EntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
@@ -39,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,6 +64,7 @@ class OrderServiceTest {
     private final OrderNumberGenerator orderNumbers = mock(OrderNumberGenerator.class);
     private final WaitingRoomService waitingRoom = mock(WaitingRoomService.class);
     private final WaitlistService waitlist = mock(WaitlistService.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
 
     private OrderService service;
 
@@ -74,7 +77,8 @@ class OrderServiceTest {
         when(waitlist.consumeOffer(anyLong(), anyLong(), anyInt())).thenReturn(Optional.empty());
 
         service = new OrderService(
-                orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, waitlist, properties(), clock);
+                orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, waitlist, properties(), clock,
+                entityManager);
     }
 
     @Nested
@@ -191,6 +195,26 @@ class OrderServiceTest {
             // The stock taken a moment earlier goes back when the transaction rolls back,
             // so the reservation must never reach the audit trail.
             verify(inventory, never()).recordReservation(anyLong(), any(), anyInt());
+            verify(inventory).release(eq(TIER_ID), eq(1), isNull(),
+                    eq(InventoryLedgerEntry.Reason.RELEASE_ABORTED));
+        }
+
+        @Test
+        @DisplayName("a lost race on the same Idempotency-Key returns the winner after giving the extra hold back")
+        void a_duplicate_idempotency_key_replays_the_winner() {
+            givenTier(EventStatus.ON_SALE);
+            TicketOrder original = anOrder(OrderStatus.PENDING_PAYMENT);
+            when(orders.findByIdempotencyKey("key-1"))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(original));
+            when(orders.saveAndFlush(any(TicketOrder.class)))
+                    .thenThrow(new DataIntegrityViolationException("uk_orders_idempotency"));
+
+            TicketOrder result = service.checkout(USER_ID, TIER_ID, 1, "key-1");
+
+            assertThat(result).isSameAs(original);
+            verify(inventory).release(eq(TIER_ID), eq(1), isNull(),
+                    eq(InventoryLedgerEntry.Reason.RELEASE_ABORTED));
         }
     }
 
@@ -318,6 +342,9 @@ class OrderServiceTest {
                 new TicketingProperties.Security("test-secret-that-is-long-enough-32", Duration.ofHours(2)),
                 new TicketingProperties.Seed(false, 0, 0, 0, 0, 0, 1L),
                 new TicketingProperties.Cors(List.of("http://localhost:5173")),
-                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false));
+                new TicketingProperties.Ml("http://127.0.0.1:9", Duration.ofSeconds(1), false),
+                new TicketingProperties.Llm("", "http://127.0.0.1:9", "gpt-4o-mini", Duration.ofSeconds(1), false),
+                new TicketingProperties.LoadTest(false),
+                new TicketingProperties.RateLimit(false, 8, 20, 5));
     }
 }

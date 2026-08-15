@@ -28,6 +28,10 @@ spring:
 
 server:
   port: 8080
+  tomcat:
+    # Defaults match Tomcat. The load-test stampede raises these via env.
+    max-connections: ${FT_TOMCAT_MAX_CONNECTIONS:8192}
+    accept-count: ${FT_TOMCAT_ACCEPT_COUNT:100}
 
 management:
   endpoints:
@@ -63,6 +67,19 @@ ticketing:
     base-url: ${FT_ML_BASE_URL:http://localhost:8090}
     timeout: PT3S
     run-on-startup: ${FT_FORECAST_ON_START:false}
+  llm:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${FT_LLM_BASE_URL:https://api.openai.com/v1}
+    model: ${FT_LLM_MODEL:gpt-4o-mini}
+    timeout: PT8S
+    run-on-startup: ${FT_INSIGHTS_ON_START:false}
+  load-test:
+    enabled: ${FT_LOADTEST_ENABLED:false}
+  rate-limit:
+    enabled: ${FT_RATE_LIMIT_ENABLED:true}
+    checkout-per-minute: 8
+    join-per-minute: 20
+    burst-per-ten-seconds: 5
   seed:
     enabled: ${FT_SEED_ENABLED:false}
     artists: 40

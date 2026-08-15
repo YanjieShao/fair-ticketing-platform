@@ -30,6 +30,7 @@ public class InventoryLedgerEntry {
         RELEASE_EXPIRED,
         RELEASE_OFFER_EXPIRED,
         RELEASE_OFFER_CANCELLED,
+        RELEASE_ABORTED,
         RECONCILIATION
     }
 

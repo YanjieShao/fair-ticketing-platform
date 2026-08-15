@@ -11,9 +11,10 @@ import java.time.Clock;
 import java.time.Instant;
 
 /**
- * Writes the transactional messages the product has to send. Insight-style
- * copy comes later; duplicates are swallowed because the unique key is the
- * real guarantee that a buyer is not told twice.
+ * Writes the messages the product has to send. Transactional copy stays on
+ * templates. Insight copy is a consumer of analytics numbers, not a second
+ * notification platform. Duplicates are swallowed because the unique key is
+ * the real guarantee that nobody is told twice.
  */
 @Service
 public class NotificationService {
@@ -33,15 +34,37 @@ public class NotificationService {
                            String title,
                            String body,
                            String dedupeKey) {
+        write(userId, type, "INFO", title, body, null, "ORDER_EVENT", "TEMPLATE", dedupeKey);
+    }
+
+    public void notifyInsight(Long userId,
+                              String title,
+                              String body,
+                              String payloadJson,
+                              String generatedBy,
+                              String dedupeKey) {
+        write(userId, "SALES_INSIGHT", "INFO", title, body, payloadJson, "ANALYTICS", generatedBy, dedupeKey);
+    }
+
+    private void write(Long userId,
+                       String type,
+                       String severity,
+                       String title,
+                       String body,
+                       String payloadJson,
+                       String sourceType,
+                       String generatedBy,
+                       String dedupeKey) {
         try {
             notifications.save(new Notification(
                     userId,
                     type,
-                    "INFO",
+                    severity,
                     title,
                     body,
-                    "ORDER_EVENT",
-                    "TEMPLATE",
+                    payloadJson,
+                    sourceType,
+                    generatedBy,
                     dedupeKey,
                     Instant.now(clock)));
         } catch (DataIntegrityViolationException duplicate) {

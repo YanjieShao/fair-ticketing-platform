@@ -2,7 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 export function Shell() {
-  const { signedIn, logout } = useAuth()
+  const { signedIn, isAdmin, logout } = useAuth()
 
   return (
     <div className="app">
@@ -16,6 +16,10 @@ export function Shell() {
             <>
               <NavLink to="/orders">Orders</NavLink>
               <NavLink to="/waitlist">Waitlist</NavLink>
+              <NavLink to="/notifications">Inbox</NavLink>
+              {isAdmin ? <NavLink to="/admin">Dashboard</NavLink> : null}
+              {isAdmin ? <NavLink to="/admin/events/new">List a show</NavLink> : null}
+              {isAdmin ? <NavLink to="/admin/insights">Insights</NavLink> : null}
               <button type="button" className="linkish" onClick={logout}>
                 Sign out
               </button>

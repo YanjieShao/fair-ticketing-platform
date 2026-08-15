@@ -74,6 +74,7 @@ public class InventoryReconciliationService {
     }
 
     @Scheduled(fixedDelayString = "${ticketing.inventory.reconcile-interval:PT10S}")
+    @Transactional
     public void reconcileTiersOnSale() {
         List<Long> tierIds = tiers.findIdsByEventStatuses(SELLING);
         tierIds.forEach(this::reconcileTier);

@@ -144,6 +144,14 @@ class WaitlistCheckoutIT extends AbstractIntegrationTest {
         assertThat(notifications.count()).isEqualTo(1);
         assertThat(tiers.findById(tierId).orElseThrow().availableQuantity()).isZero();
 
+        http.perform(get("/api/notifications").header("Authorization", "Bearer " + waiterToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].type").value("WAITLIST_OFFER"))
+                .andExpect(jsonPath("$.content[0].title").value("A ticket is being held for you"));
+        http.perform(get("/api/notifications").header("Authorization", "Bearer " + holderToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+
         checkout(waiterToken, "from-waitlist")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.quantity").value(1));

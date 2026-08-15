@@ -5,6 +5,7 @@ import { checkoutKey, clearCheckoutKey } from '../api/idempotency'
 import { formatInstant } from '../api/money'
 import type { Order, SpringPage, WaitlistEntry } from '../api/types'
 import { ApiErrorBanner } from '../components/ApiErrorBanner'
+import { SimilarShows } from '../components/SimilarShows'
 import { StatusChip } from '../components/StatusChip'
 
 export function WaitlistPage() {
@@ -33,6 +34,14 @@ export function WaitlistPage() {
       navigate(`/orders/${order.orderNo}`)
     },
   })
+
+  const waitingOn = [
+    ...new Set(
+      (entries.data?.content ?? [])
+        .filter((entry) => entry.status === 'WAITING' || entry.status === 'OFFERED')
+        .map((entry) => entry.eventId),
+    ),
+  ]
 
   return (
     <section>
@@ -79,6 +88,10 @@ export function WaitlistPage() {
           You are not on a waitlist. Join from a <Link to="/">sold-out show</Link>.
         </p>
       ) : null}
+
+      {waitingOn.map((eventId) => (
+        <SimilarShows key={eventId} eventId={eventId} />
+      ))}
     </section>
   )
 }

@@ -1,5 +1,7 @@
 package com.fairticketing.event.web;
 
+import com.fairticketing.ai.service.WaitlistRecommendationService;
+import com.fairticketing.ai.web.RecommendationResponse;
 import com.fairticketing.event.service.EventQueryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/events")
@@ -19,9 +22,11 @@ public class EventController {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final EventQueryService events;
+    private final WaitlistRecommendationService recommendationService;
 
-    public EventController(EventQueryService events) {
+    public EventController(EventQueryService events, WaitlistRecommendationService recommendationService) {
         this.events = events;
+        this.recommendationService = recommendationService;
     }
 
     @GetMapping
@@ -48,5 +53,10 @@ public class EventController {
     @GetMapping("/{eventId}")
     public EventDetailResponse detail(@PathVariable Long eventId) {
         return events.detail(eventId);
+    }
+
+    @GetMapping("/{eventId}/recommendations")
+    public List<RecommendationResponse> recommendations(@PathVariable Long eventId) {
+        return recommendationService.forEvent(eventId);
     }
 }

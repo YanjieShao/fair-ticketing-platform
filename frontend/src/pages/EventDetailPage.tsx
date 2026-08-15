@@ -7,6 +7,7 @@ import { formatCents, formatInstant } from '../api/money'
 import type { EventDetail, Order, TicketTier, WaitlistEntry } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { ApiErrorBanner } from '../components/ApiErrorBanner'
+import { SimilarShows } from '../components/SimilarShows'
 import { StatusChip } from '../components/StatusChip'
 
 const ADMITTED_PREFIX = 'ft.admitted:'
@@ -96,6 +97,12 @@ export function EventDetailPage() {
           {show.forecast.capacity.toLocaleString('en-IE')} ({show.forecast.riskLevel}).
         </p>
       ) : null}
+      {show.insight ? (
+        <aside className="insight">
+          <p className="eyebrow">Sales insight · {show.insight.generatedBy}</p>
+          <p>{show.insight.content}</p>
+        </aside>
+      ) : null}
 
       <ApiErrorBanner error={checkout.error} />
       <ApiErrorBanner error={joinWaitlist.error} />
@@ -164,6 +171,10 @@ export function EventDetailPage() {
           </li>
         ))}
       </ul>
+
+      {show.status === 'SOLD_OUT' || show.tiers.some((tier) => tier.soldOut) ? (
+        <SimilarShows eventId={show.id} />
+      ) : null}
 
       <p>
         <Link to="/">Back to shows</Link>

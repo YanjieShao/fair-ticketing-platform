@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Duration;
 
@@ -29,10 +30,14 @@ public class WaitingRoomController {
 
     private final WaitingRoomService waitingRoom;
     private final EventRepository events;
+    private final WaitingRoomStreamer streamer;
 
-    public WaitingRoomController(WaitingRoomService waitingRoom, EventRepository events) {
+    public WaitingRoomController(WaitingRoomService waitingRoom,
+                                 EventRepository events,
+                                 WaitingRoomStreamer streamer) {
         this.waitingRoom = waitingRoom;
         this.events = events;
+        this.streamer = streamer;
     }
 
     @PostMapping("/{eventId}/join")
@@ -46,7 +51,7 @@ public class WaitingRoomController {
 
     /**
      * Clients poll this. Each call is also what moves the line along, so a room
-     * nobody is watching costs nothing.
+     * nobody is watching costs nothing. Prefer {@link #stream} in the UI.
      */
     @GetMapping("/{eventId}")
     public WaitingRoomResponse status(@AuthenticationPrincipal Jwt jwt, @PathVariable Long eventId) {
@@ -55,6 +60,17 @@ public class WaitingRoomController {
             return openDoor(eventId);
         }
         return WaitingRoomResponse.from(eventId, waitingRoom.status(eventId, userId(jwt)));
+    }
+
+    /**
+     * Same payload as {@link #status}, pushed until the buyer is admitted or
+     * drops out. The server tick is what drains the queue for this connection.
+     */
+    @GetMapping(path = "/{eventId}/stream", produces = "text/event-stream")
+    public SseEmitter stream(@AuthenticationPrincipal Jwt jwt, @PathVariable Long eventId) {
+        Event event = requireEvent(eventId);
+        boolean queueOn = waitingRoom.enabled() && event.isWaitingRoomEnabled();
+        return streamer.open(eventId, userId(jwt), queueOn);
     }
 
     @DeleteMapping("/{eventId}")
@@ -67,7 +83,7 @@ public class WaitingRoomController {
      * With the queue switched off the answer is still a valid pass, so clients
      * do not need a second code path for deployments that do not need one.
      */
-    private static WaitingRoomResponse openDoor(Long eventId) {
+    static WaitingRoomResponse openDoor(Long eventId) {
         return new WaitingRoomResponse(eventId, WaitingRoomStatus.ADMITTED, 0, 0, Duration.ZERO.toSeconds(), null);
     }
 

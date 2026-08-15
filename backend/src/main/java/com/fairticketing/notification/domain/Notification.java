@@ -1,5 +1,7 @@
 package com.fairticketing.notification.domain;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -36,6 +38,10 @@ public class Notification {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String body;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "payload_json")
+    private String payloadJson;
+
     @Column(name = "source_type", nullable = false, length = 30)
     private String sourceType;
 
@@ -53,6 +59,7 @@ public class Notification {
                         String severity,
                         String title,
                         String body,
+                        String payloadJson,
                         String sourceType,
                         String generatedBy,
                         String dedupeKey,
@@ -62,6 +69,7 @@ public class Notification {
         this.severity = severity;
         this.title = title;
         this.body = body;
+        this.payloadJson = payloadJson;
         this.sourceType = sourceType;
         this.generatedBy = generatedBy;
         this.dedupeKey = dedupeKey;

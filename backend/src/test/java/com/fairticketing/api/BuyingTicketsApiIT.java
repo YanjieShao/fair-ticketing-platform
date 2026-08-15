@@ -178,6 +178,27 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
         }
 
         @Test
+        void a_price_ceiling_below_every_tier_hides_the_show() throws Exception {
+            http.perform(get("/api/events").param("maxPriceCents", "4000"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        @Test
+        void a_price_floor_still_matches_if_any_tier_is_in_range() throws Exception {
+            http.perform(get("/api/events").param("minPriceCents", "8000"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].title").value("Live in Dublin"));
+        }
+
+        @Test
+        void a_date_window_after_the_show_returns_nothing() throws Exception {
+            http.perform(get("/api/events").param("from", Instant.now().plus(Duration.ofDays(90)).toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        @Test
         @DisplayName("tiers come back cheapest first, in a stable order")
         void the_detail_page_lists_every_tier() throws Exception {
             http.perform(get("/api/events/" + eventId))

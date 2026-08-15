@@ -1,6 +1,8 @@
 package com.fairticketing.event.service;
 
+import com.fairticketing.ai.domain.AiInsight;
 import com.fairticketing.ai.domain.DemandForecast;
+import com.fairticketing.ai.repository.AiInsightRepository;
 import com.fairticketing.ai.repository.DemandForecastRepository;
 import com.fairticketing.common.error.BusinessException;
 import com.fairticketing.common.error.ErrorCode;
@@ -36,17 +38,20 @@ public class EventQueryService {
     private final TicketTierRepository tiers;
     private final InventoryService inventory;
     private final DemandForecastRepository forecasts;
+    private final AiInsightRepository insights;
     private final WaitingRoomService waitingRoom;
 
     public EventQueryService(EventRepository events,
                              TicketTierRepository tiers,
                              InventoryService inventory,
                              DemandForecastRepository forecasts,
+                             AiInsightRepository insights,
                              WaitingRoomService waitingRoom) {
         this.events = events;
         this.tiers = tiers;
         this.inventory = inventory;
         this.forecasts = forecasts;
+        this.insights = insights;
         this.waitingRoom = waitingRoom;
     }
 
@@ -97,8 +102,12 @@ public class EventQueryService {
         EventDetailResponse.ForecastView forecast = forecasts.findFirstByEventIdOrderByGeneratedAtDesc(eventId)
                 .map(EventQueryService::toView)
                 .orElse(null);
+        EventDetailResponse.InsightView insight = insights
+                .findFirstByScopeTypeAndScopeIdOrderByCreatedAtDesc(AiInsight.SCOPE_EVENT, eventId)
+                .map(EventQueryService::toInsight)
+                .orElse(null);
 
-        return EventDetailResponse.from(event, eventTiers, remaining, forecast, queueIsLive(event));
+        return EventDetailResponse.from(event, eventTiers, remaining, forecast, insight, queueIsLive(event));
     }
 
     private boolean queueIsLive(Event event) {
@@ -114,6 +123,13 @@ public class EventQueryService {
                 forecast.getModelVersion());
     }
 
+    private static EventDetailResponse.InsightView toInsight(AiInsight insight) {
+        return new EventDetailResponse.InsightView(
+                insight.getContent(),
+                insight.getGeneratedBy(),
+                insight.getCreatedAt());
+    }
+
     private Map<Long, Availability> availabilityFor(List<Event> page) {
         if (page.isEmpty()) {
             return Map.of();
@@ -127,6 +143,6 @@ public class EventQueryService {
     }
 
     public record Availability(int ticketsAvailable, int lowestPriceCents) {
-        static final Availability NONE = new Availability(0, 0);
+        public static final Availability NONE = new Availability(0, 0);
     }
 }

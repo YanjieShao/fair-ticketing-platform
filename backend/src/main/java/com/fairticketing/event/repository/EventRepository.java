@@ -33,6 +33,15 @@ public interface EventRepository extends JpaRepository<Event, Long>, JpaSpecific
 
     @Query("""
             select e from Event e
+            join fetch e.artist
+            join fetch e.venue
+            where e.status = :status
+              and e.id <> :eventId
+            """)
+    List<Event> findOnSaleOtherThan(@Param("status") EventStatus status, @Param("eventId") Long eventId);
+
+    @Query("""
+            select e from Event e
             where e.status = :status
               and e.salesStartAt <= :now
               and e.salesEndAt > :now
