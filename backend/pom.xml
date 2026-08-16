@@ -109,11 +109,9 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!-- Raw Testcontainers only. spring-boot-testcontainers registers
+             containers as beans and closes them when a @TestPropertySource
+             context is replaced, which is what broke BuyingTicketsApiIT. -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
@@ -133,6 +131,16 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <environmentVariables>
+                        <!-- Lets withReuse(true) actually stick. Without this,
+                             Ryuk kills MySQL when a later IT class starts its
+                             own Spring context. -->
+                        <TESTCONTAINERS_REUSE_ENABLE>true</TESTCONTAINERS_REUSE_ENABLE>
+                    </environmentVariables>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

@@ -9,6 +9,35 @@ jobs:
   backend:
     runs-on: ubuntu-latest
 
+    # One MySQL and one Redis for the whole job. Stacking a Testcontainers
+    # MySQL per @TestPropertySource OOMs the runner and leaves BuyingTicketsApiIT
+    # holding a DataSource to a port that is already gone.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: fair_ticketing
+          MYSQL_USER: ticketing
+          MYSQL_PASSWORD: ticketing
+          TZ: UTC
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
     steps:
       - uses: actions/checkout@v4
 
@@ -18,11 +47,10 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # verify, not test: the concurrency tests are the point of this project and
-      # they need the real database. GitHub runners already expose a Docker socket
-      # where Testcontainers expects it.
       - name: Build and test
         working-directory: backend
+        env:
+          FT_IT_EXTERNAL: "true"
         run: ./mvnw -B verify
 
   frontend:
