@@ -30,9 +30,9 @@ test('a new buyer can hold tickets and pay', async ({ page }) => {
   await page.getByLabel('Artist').fill(artistName)
   await page.getByRole('button', { name: 'Search' }).click()
   await page.getByRole('link', { name: showTitle }).click()
-  await page.getByRole('button', { name: 'Hold tickets' }).click()
+  await page.getByRole('button', { name: 'Purchase' }).click()
   await expect(page.getByText('PENDING PAYMENT')).toBeVisible()
-  await page.getByRole('button', { name: 'Pay now' }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page.getByText('COMPLETED')).toBeVisible()
 })
 

@@ -59,7 +59,7 @@ class WaitlistServiceTest {
         when(entries.saveAndFlush(any(WaitlistEntry.class))).thenAnswer(call -> call.getArgument(0));
         when(entries.maxPositionSeq(TIER_ID)).thenReturn(3L);
         when(tiers.findByIdForUpdate(TIER_ID)).thenReturn(Optional.of(mock()));
-        when(orders.findByActiveLockKey(anyString())).thenReturn(Optional.empty());
+        when(orders.sumOccupyingQuantity(anyLong(), anyLong(), any())).thenReturn(0);
 
         waitlist = new WaitlistService(
                 entries, tiers, orders, inventory, notifications, properties(), clock);

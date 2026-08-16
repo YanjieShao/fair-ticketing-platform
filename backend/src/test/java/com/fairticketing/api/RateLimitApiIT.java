@@ -117,9 +117,7 @@ class RateLimitApiIT extends AbstractIntegrationTest {
     @Test
     void a_third_checkout_from_the_same_account_is_rate_limited() throws Exception {
         checkout("key-1").andExpect(status().isCreated());
-        checkout("key-2")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("DUPLICATE_ACTIVE_ORDER"));
+        checkout("key-2").andExpect(status().isCreated());
         checkout("key-3")
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("RATE_LIMITED"))
@@ -130,7 +128,7 @@ class RateLimitApiIT extends AbstractIntegrationTest {
     @Test
     void another_account_is_not_punished_for_the_first_buyers_retries() throws Exception {
         checkout("solo-1").andExpect(status().isCreated());
-        checkout("solo-2").andExpect(status().isConflict());
+        checkout("solo-2").andExpect(status().isCreated());
         checkout("solo-3").andExpect(status().isTooManyRequests());
 
         String other = register("other-limited@example.com");

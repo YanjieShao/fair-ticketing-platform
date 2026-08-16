@@ -17,14 +17,32 @@ export function OrdersPage() {
       <h1>Your orders</h1>
       <ApiErrorBanner error={orders.error} />
       {orders.isLoading ? <p>Loading orders…</p> : null}
-      <ul className="plain-list">
+      <ul className="show-list">
         {orders.data?.content.map((order) => (
           <li key={order.orderNo}>
-            <Link to={`/orders/${order.orderNo}`} className="row-link">
-              <span>{order.orderNo}</span>
-              <StatusChip>{order.status}</StatusChip>
-              <span>{formatCents(order.totalCents)}</span>
-              <span className="muted">{formatInstant(order.createdAt)}</span>
+            <Link to={`/orders/${order.orderNo}`} className="show-card">
+              <div>
+                {order.artistName ? <p className="muted">{order.artistName}</p> : null}
+                <h2>{order.eventTitle ?? `Event ${order.eventId}`}</h2>
+                <p>
+                  {order.tierName ?? `Tier ${order.tierId}`} · {order.quantity} ticket
+                  {order.quantity === 1 ? '' : 's'}
+                </p>
+                {order.venueName || order.city ? (
+                  <p className="muted">
+                    {[order.venueName, order.city].filter(Boolean).join(', ')}
+                    {order.startsAt
+                      ? ` · ${formatInstant(order.startsAt, order.venueTimezone)}`
+                      : ''}
+                  </p>
+                ) : null}
+                <p className="muted mono">{order.orderNo}</p>
+              </div>
+              <div className="show-meta">
+                <StatusChip>{order.status}</StatusChip>
+                <p>{formatCents(order.totalCents)}</p>
+                <p className="muted">{formatInstant(order.createdAt, order.venueTimezone)}</p>
+              </div>
             </Link>
           </li>
         ))}

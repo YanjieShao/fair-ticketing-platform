@@ -12,7 +12,8 @@ import java.util.Set;
  * (CREATED to COMPLETED); EXPIRED and CANCELLED are required because unpaid
  * orders must release their inventory and users may cancel before paying.
  *
- * <p>Refunds are out of scope, so a PAID order can only move forward.
+ * <p>A completed order can still be cancelled: that is a mock return (restock
+ * plus waitlist), not a card refund. Real money never moved.
  */
 public enum OrderStatus {
 
@@ -22,11 +23,11 @@ public enum OrderStatus {
     PENDING_PAYMENT,
     /** Payment confirmed. */
     PAID,
-    /** Tickets issued. Terminal. */
+    /** Tickets issued. Can still be returned (mock refund) to CANCELLED. */
     COMPLETED,
     /** Payment window elapsed, inventory released. Terminal. */
     EXPIRED,
-    /** Cancelled by the user before payment, inventory released. Terminal. */
+    /** Cancelled by the user (unpaid hold or mock return), inventory released. Terminal. */
     CANCELLED;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED;
@@ -35,8 +36,8 @@ public enum OrderStatus {
         ALLOWED = new EnumMap<>(OrderStatus.class);
         ALLOWED.put(CREATED, EnumSet.of(PENDING_PAYMENT, CANCELLED, EXPIRED));
         ALLOWED.put(PENDING_PAYMENT, EnumSet.of(PAID, CANCELLED, EXPIRED));
-        ALLOWED.put(PAID, EnumSet.of(COMPLETED));
-        ALLOWED.put(COMPLETED, EnumSet.noneOf(OrderStatus.class));
+        ALLOWED.put(PAID, EnumSet.of(COMPLETED, CANCELLED));
+        ALLOWED.put(COMPLETED, EnumSet.of(CANCELLED));
         ALLOWED.put(EXPIRED, EnumSet.noneOf(OrderStatus.class));
         ALLOWED.put(CANCELLED, EnumSet.noneOf(OrderStatus.class));
     }
@@ -56,10 +57,14 @@ public enum OrderStatus {
         return ALLOWED.get(this).isEmpty();
     }
 
+    /** Only unpaid holds time out. A completed order keeps its seats until returned. */
+    public boolean canExpire() {
+        return this == CREATED || this == PENDING_PAYMENT;
+    }
+
     /**
      * Whether an order in this state still counts against a tier's reserved
-     * quantity. Drives both inventory release and the "one active order per
-     * user per event" rule.
+     * quantity and the per-user per-tier purchase cap.
      */
     public boolean occupiesInventory() {
         return this == CREATED || this == PENDING_PAYMENT || this == PAID || this == COMPLETED;

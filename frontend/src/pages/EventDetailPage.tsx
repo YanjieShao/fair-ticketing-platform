@@ -1,16 +1,17 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { checkoutKey, clearCheckoutKey } from '../api/idempotency'
 import { formatCents, formatInstant } from '../api/money'
-import type { EventDetail, Order, TicketTier, WaitlistEntry } from '../api/types'
+import type { EventDetail, Order, SpringPage, TicketTier, WaitlistEntry } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { ApiErrorBanner } from '../components/ApiErrorBanner'
 import { SimilarShows } from '../components/SimilarShows'
 import { StatusChip } from '../components/StatusChip'
 
 const ADMITTED_PREFIX = 'ft.admitted:'
+const HOLDING = new Set(['CREATED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED'])
 
 function isAdmitted(eventId: string): boolean {
   return sessionStorage.getItem(ADMITTED_PREFIX + eventId) === '1'
@@ -26,6 +27,19 @@ export function EventDetailPage() {
     queryKey: ['event', eventId],
     queryFn: () => api<EventDetail>(`/api/events/${eventId}`),
   })
+
+  const mine = useQuery({
+    queryKey: ['orders'],
+    queryFn: () => api<SpringPage<Order>>('/api/orders'),
+    enabled: signedIn,
+  })
+
+  useEffect(() => {
+    if (!signedIn || !event.data?.waitingRoomEnabled || isAdmitted(eventId)) {
+      return
+    }
+    navigate(`/events/${eventId}/queue`, { replace: true })
+  }, [signedIn, event.data, eventId, navigate])
 
   const checkout = useMutation({
     mutationFn: ({ tier, quantity }: { tier: TicketTier; quantity: number }) =>
@@ -64,8 +78,19 @@ export function EventDetailPage() {
   const show = event.data
   const admitted = !show.waitingRoomEnabled || isAdmitted(eventId)
 
+  function ownedOn(tierId: number): number {
+    return (mine.data?.content ?? [])
+      .filter((order) => order.tierId === tierId && HOLDING.has(order.status))
+      .reduce((total, order) => total + order.quantity, 0)
+  }
+
   function quantityFor(tier: TicketTier): number {
-    return quantities[tier.id] ?? 1
+    const max = Math.max(1, remainingAllowance(tier))
+    return Math.min(quantities[tier.id] ?? 1, max)
+  }
+
+  function remainingAllowance(tier: TicketTier): number {
+    return Math.max(0, tier.maxPerUser - ownedOn(tier.id))
   }
 
   function buy(tier: TicketTier) {
@@ -89,7 +114,9 @@ export function EventDetailPage() {
       </p>
       <p className="muted">
         <StatusChip>{show.status}</StatusChip>
-        {show.waitingRoomEnabled ? ' Waiting room is on for this sale.' : null}
+        {show.waitingRoomEnabled
+          ? ' High-demand sale: signed-in buyers join the waiting room automatically. The waitlist is only after sell-out.'
+          : null}
       </p>
       {show.forecast ? (
         <p>
@@ -114,6 +141,7 @@ export function EventDetailPage() {
               <h2>{tier.name}</h2>
               <p>
                 {formatCents(tier.priceCents, tier.currency)} · {tier.availableQuantity} left
+                {ownedOn(tier.id) > 0 ? ` · you have ${ownedOn(tier.id)}` : ''}
               </p>
             </div>
             {tier.soldOut ? (
@@ -126,20 +154,24 @@ export function EventDetailPage() {
                       setQuantities((current) => ({ ...current, [tier.id]: Number(e.target.value) }))
                     }
                   >
-                    {Array.from({ length: Math.max(1, tier.maxPerUser) }, (_, i) => i + 1).map((n) => (
+                    {Array.from({ length: Math.max(1, remainingAllowance(tier)) }, (_, i) => i + 1).map((n) => (
                       <option key={n} value={n}>
                         {n}
                       </option>
                     ))}
                   </select>
                 </label>
-                <button type="button" onClick={() => {
-                  if (!signedIn) {
-                    navigate('/login', { state: { from: `/events/${eventId}` } })
-                    return
-                  }
-                  joinWaitlist.mutate({ tier, quantity: quantityFor(tier) })
-                }}>
+                <button
+                  type="button"
+                  disabled={remainingAllowance(tier) === 0}
+                  onClick={() => {
+                    if (!signedIn) {
+                      navigate('/login', { state: { from: `/events/${eventId}` } })
+                      return
+                    }
+                    joinWaitlist.mutate({ tier, quantity: quantityFor(tier) })
+                  }}
+                >
                   Join waitlist
                 </button>
               </div>
@@ -154,7 +186,12 @@ export function EventDetailPage() {
                     }
                   >
                     {Array.from(
-                      { length: Math.min(tier.maxPerUser, Math.max(1, tier.availableQuantity)) },
+                      {
+                        length: Math.min(
+                          remainingAllowance(tier) || 1,
+                          Math.max(1, tier.availableQuantity),
+                        ),
+                      },
                       (_, i) => i + 1,
                     ).map((n) => (
                       <option key={n} value={n}>
@@ -163,8 +200,12 @@ export function EventDetailPage() {
                     ))}
                   </select>
                 </label>
-                <button type="button" disabled={checkout.isPending} onClick={() => buy(tier)}>
-                  {show.waitingRoomEnabled && !admitted ? 'Join queue' : 'Hold tickets'}
+                <button
+                  type="button"
+                  disabled={checkout.isPending || remainingAllowance(tier) === 0}
+                  onClick={() => buy(tier)}
+                >
+                  Purchase
                 </button>
               </div>
             )}

@@ -6,6 +6,7 @@ import com.fairticketing.common.error.BusinessException;
 import com.fairticketing.common.error.ErrorCode;
 import com.fairticketing.event.domain.EventStatus;
 import com.fairticketing.inventory.domain.InventoryLedgerEntry;
+import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.TicketTierRepository;
 import com.fairticketing.inventory.repository.TierPurchaseView;
 import com.fairticketing.inventory.service.InventoryService;
@@ -75,6 +76,8 @@ class OrderServiceTest {
         when(orders.saveAndFlush(any(TicketOrder.class))).thenAnswer(call -> call.getArgument(0));
         when(inventory.tryReserve(anyLong(), anyInt())).thenReturn(true);
         when(waitlist.consumeOffer(anyLong(), anyLong(), anyInt())).thenReturn(Optional.empty());
+        when(tiers.findByIdForUpdate(TIER_ID)).thenReturn(Optional.of(mock(TicketTier.class)));
+        when(orders.sumOccupyingQuantity(eq(USER_ID), eq(TIER_ID), any())).thenReturn(0);
 
         service = new OrderService(
                 orders, tiers, inventory, gateway, payments, orderNumbers, waitingRoom, waitlist, properties(), clock,
@@ -183,20 +186,27 @@ class OrderServiceTest {
         }
 
         @Test
-        @DisplayName("the unique index, not the application, has the last word on duplicate orders")
-        void maps_the_unique_index_violation_to_a_business_error() {
+        @DisplayName("a second purchase is allowed until the per-tier cap is reached")
+        void a_follow_up_order_counts_tickets_already_held() {
             givenTier(EventStatus.ON_SALE);
-            when(orders.saveAndFlush(any(TicketOrder.class)))
-                    .thenThrow(new DataIntegrityViolationException("uk_orders_active_lock"));
+            when(orders.sumOccupyingQuantity(eq(USER_ID), eq(TIER_ID), any())).thenReturn(2);
 
-            assertThatThrownBy(() -> service.checkout(USER_ID, TIER_ID, 1, "key-1"))
+            TicketOrder order = service.checkout(USER_ID, TIER_ID, 2, "key-2");
+
+            assertThat(order.getQuantity()).isEqualTo(2);
+            verify(inventory).tryReserve(TIER_ID, 2);
+        }
+
+        @Test
+        @DisplayName("already holding tickets still counts against the per-tier cap")
+        void rejects_when_held_plus_new_exceeds_the_limit() {
+            givenTier(EventStatus.ON_SALE);
+            when(orders.sumOccupyingQuantity(eq(USER_ID), eq(TIER_ID), any())).thenReturn(3);
+
+            assertThatThrownBy(() -> service.checkout(USER_ID, TIER_ID, 2, "key-2"))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("code").isEqualTo(ErrorCode.DUPLICATE_ACTIVE_ORDER);
-            // The stock taken a moment earlier goes back when the transaction rolls back,
-            // so the reservation must never reach the audit trail.
-            verify(inventory, never()).recordReservation(anyLong(), any(), anyInt());
-            verify(inventory).release(eq(TIER_ID), eq(1), isNull(),
-                    eq(InventoryLedgerEntry.Reason.RELEASE_ABORTED));
+                    .extracting("code").isEqualTo(ErrorCode.PURCHASE_LIMIT_EXCEEDED);
+            verify(inventory, never()).tryReserve(anyLong(), anyInt());
         }
 
         @Test
@@ -291,6 +301,25 @@ class OrderServiceTest {
             assertThat(result.getActiveLockKey()).isNull();
             verify(inventory).release(eq(TIER_ID), eq(2), any(), eq(InventoryLedgerEntry.Reason.RELEASE_CANCELLED));
             verify(waitlist).offerHead(TIER_ID);
+            verify(gateway, never()).refund(anyString(), anyInt());
+        }
+
+        @Test
+        @DisplayName("returning a completed order restocks the tier and records a mock refund")
+        void cancelling_completed_tickets_records_a_mock_refund() {
+            TicketOrder order = anOrder(OrderStatus.COMPLETED);
+            when(orders.findByOrderNo("FT-1")).thenReturn(Optional.of(order));
+            when(gateway.refund(anyString(), anyInt()))
+                    .thenReturn(new PaymentGateway.Charge("ref-rf", Payment.Status.REFUNDED));
+
+            TicketOrder result = service.cancel(USER_ID, "FT-1");
+
+            assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(result.getActiveLockKey()).isNull();
+            verify(gateway).refund("FT-1", 10_000);
+            verify(payments).save(any(Payment.class));
+            verify(inventory).release(eq(TIER_ID), eq(2), any(), eq(InventoryLedgerEntry.Reason.RELEASE_CANCELLED));
+            verify(waitlist).offerHead(TIER_ID);
         }
 
         @Test
@@ -326,10 +355,21 @@ class OrderServiceTest {
     private TicketOrder anOrder(OrderStatus status, Instant expiresAt) {
         TicketOrder order = TicketOrder.create(
                 "FT-1", USER_ID, EVENT_ID, TIER_ID, 2, 5_000, "key-1", NOW, expiresAt);
-        if (status != OrderStatus.CREATED) {
-            order.transitionTo(status, NOW);
+        for (OrderStatus step : pathTo(status)) {
+            order.transitionTo(step, NOW);
         }
         return order;
+    }
+
+    private static OrderStatus[] pathTo(OrderStatus status) {
+        return switch (status) {
+            case CREATED -> new OrderStatus[0];
+            case PENDING_PAYMENT -> new OrderStatus[]{OrderStatus.PENDING_PAYMENT};
+            case PAID -> new OrderStatus[]{OrderStatus.PENDING_PAYMENT, OrderStatus.PAID};
+            case COMPLETED -> new OrderStatus[]{
+                    OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.COMPLETED};
+            case CANCELLED, EXPIRED -> new OrderStatus[]{status};
+        };
     }
 
     private static TicketingProperties properties() {

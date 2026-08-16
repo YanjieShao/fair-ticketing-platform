@@ -18,15 +18,15 @@ import type { AdminDashboard, AdminInsight } from '../api/types'
 import { ApiErrorBanner } from '../components/ApiErrorBanner'
 import { StatusChip } from '../components/StatusChip'
 
-const AXIS = { fill: '#cfc6b4', fontSize: 12 }
-const GRID = '#2c261d'
-const INK = '#f3ead7'
-const RED = '#c4452d'
-const GREEN = '#d7e3c0'
+const AXIS = { fill: '#6b6458', fontSize: 12 }
+const GRID = '#d8cdb8'
+const INK = '#1c1914'
+const RED = '#b42318'
+const GREEN = '#2f5d3a'
 
 const tooltipStyle = {
-  background: '#1a1611',
-  border: '1px solid #2c261d',
+  background: '#fffdf7',
+  border: '1px solid #1c1914',
   color: INK,
 }
 

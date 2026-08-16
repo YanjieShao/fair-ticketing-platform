@@ -20,8 +20,10 @@ The name commits the system to three mechanisms, each of which is testable:
 
 ## Status
 
-A buyer can browse events, join a waiting room, hold tickets, pay, and cancel
-from the React UI. Search covers artist, city, category, date, and price, and
+A buyer can browse events, enter a waiting room automatically on a high-demand
+show, purchase tickets, confirm or cancel the reservation, or return a
+completed order (mock refund: restock plus waitlist, no card movement). A
+second order on the same event is allowed until the per-tier cap is reached. Search covers artist, city, category, date, and price, and
 paginates. Unpaid holds are returned automatically. The waiting room
 UI listens on SSE and falls back to polling if the stream drops. Checkout, waitlist
 join, and waiting-room join are capped per account; a short burst from the
@@ -178,7 +180,7 @@ in line rather than whoever hits checkout first.
 | DELETE | `/api/waitlist/{id}` | buyer | leave the queue |
 | POST | `/api/orders` | buyer | hold tickets, requires `Idempotency-Key` |
 | POST | `/api/orders/{orderNo}/pay` | buyer | pay through the mock provider |
-| POST | `/api/orders/{orderNo}/cancel` | buyer | release the hold |
+| POST | `/api/orders/{orderNo}/cancel` | buyer | release a hold or return paid tickets |
 | GET | `/api/orders`, `/api/orders/{orderNo}` | buyer | order history |
 
 ### Errors

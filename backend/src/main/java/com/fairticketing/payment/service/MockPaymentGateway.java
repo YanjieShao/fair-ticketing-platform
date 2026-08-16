@@ -28,4 +28,11 @@ public class MockPaymentGateway implements PaymentGateway {
                 "mock_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24),
                 failed ? Payment.Status.FAILED : Payment.Status.SUCCEEDED);
     }
+
+    @Override
+    public Charge refund(String orderNo, int amountCents) {
+        return new Charge(
+                "mock_rf_" + UUID.randomUUID().toString().replace("-", "").substring(0, 21),
+                Payment.Status.REFUNDED);
+    }
 }

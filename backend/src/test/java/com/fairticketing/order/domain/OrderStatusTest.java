@@ -26,7 +26,8 @@ class OrderStatusTest {
                     .transitionTo(OrderStatus.COMPLETED);
 
             assertThat(status).isEqualTo(OrderStatus.COMPLETED);
-            assertThat(status.isTerminal()).isTrue();
+            assertThat(status.isTerminal()).isFalse();
+            assertThat(status.transitionTo(OrderStatus.CANCELLED)).isEqualTo(OrderStatus.CANCELLED);
         }
     }
 
@@ -43,16 +44,17 @@ class OrderStatusTest {
         }
 
         @Test
-        void paid_order_cannot_be_cancelled_because_refunds_are_out_of_scope() {
-            assertThatThrownBy(() -> OrderStatus.PAID.transitionTo(OrderStatus.CANCELLED))
-                    .isInstanceOf(IllegalStateTransitionException.class)
-                    .hasMessageContaining("PAID")
-                    .hasMessageContaining("CANCELLED");
+        void paid_or_completed_order_can_be_returned() {
+            assertThat(OrderStatus.PAID.canTransitionTo(OrderStatus.CANCELLED)).isTrue();
+            assertThat(OrderStatus.COMPLETED.canTransitionTo(OrderStatus.CANCELLED)).isTrue();
         }
 
         @Test
         void paid_order_cannot_silently_expire() {
             assertThat(OrderStatus.PAID.canTransitionTo(OrderStatus.EXPIRED)).isFalse();
+            assertThat(OrderStatus.PAID.canExpire()).isFalse();
+            assertThat(OrderStatus.COMPLETED.canExpire()).isFalse();
+            assertThat(OrderStatus.PENDING_PAYMENT.canExpire()).isTrue();
         }
 
         @ParameterizedTest
@@ -74,7 +76,7 @@ class OrderStatusTest {
     class Terminal {
 
         @ParameterizedTest
-        @EnumSource(value = OrderStatus.class, names = {"COMPLETED", "EXPIRED", "CANCELLED"})
+        @EnumSource(value = OrderStatus.class, names = {"EXPIRED", "CANCELLED"})
         void reject_every_further_transition(OrderStatus terminal) {
             assertThat(terminal.isTerminal()).isTrue();
             for (OrderStatus target : OrderStatus.values()) {
@@ -100,8 +102,9 @@ class OrderStatusTest {
         assertThat(OrderStatus.PENDING_PAYMENT.allowedTargets())
                 .isEqualTo(EnumSet.of(OrderStatus.PAID, OrderStatus.CANCELLED, OrderStatus.EXPIRED));
         assertThat(OrderStatus.PAID.allowedTargets())
-                .isEqualTo(EnumSet.of(OrderStatus.COMPLETED));
-        assertThat(OrderStatus.COMPLETED.allowedTargets()).isEmpty();
+                .isEqualTo(EnumSet.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED));
+        assertThat(OrderStatus.COMPLETED.allowedTargets())
+                .isEqualTo(EnumSet.of(OrderStatus.CANCELLED));
         assertThat(OrderStatus.EXPIRED.allowedTargets()).isEmpty();
         assertThat(OrderStatus.CANCELLED.allowedTargets()).isEmpty();
     }

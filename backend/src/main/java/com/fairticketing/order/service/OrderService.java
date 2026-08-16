@@ -33,6 +33,8 @@ public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
     private static final EnumSet<OrderStatus> HOLDING_UNPAID = EnumSet.of(OrderStatus.CREATED, OrderStatus.PENDING_PAYMENT);
+    private static final EnumSet<OrderStatus> OCCUPYING = EnumSet.of(
+            OrderStatus.CREATED, OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.COMPLETED);
 
     private final TicketOrderRepository orders;
     private final TicketTierRepository tiers;
@@ -100,7 +102,12 @@ public class OrderService {
         } else if (Instant.now(clock).isAfter(tier.salesEndAt())) {
             throw new BusinessException(ErrorCode.EVENT_NOT_ON_SALE, "This event is outside its sales window");
         }
-        requireWithinPurchaseLimit(tier, quantity);
+        // Same-tier checkouts serialize on this row so two tabs cannot each
+        // pass the cap and then both insert.
+        tiers.findByIdForUpdate(tierId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Ticket tier " + tierId + " not found"));
+        int alreadyHeld = orders.sumOccupyingQuantity(userId, tierId, OCCUPYING);
+        requireWithinPurchaseLimit(tier, alreadyHeld, quantity);
 
         if (!fromWaitlist && !inventory.tryReserve(tierId, quantity)) {
             throw new BusinessException(ErrorCode.SOLD_OUT, "Not enough tickets left in this tier");
@@ -137,8 +144,7 @@ public class OrderService {
                         .orElseThrow(() -> new BusinessException(ErrorCode.DUPLICATE_ACTIVE_ORDER,
                                 "You already have an order in progress for this event"));
             }
-            throw new BusinessException(ErrorCode.DUPLICATE_ACTIVE_ORDER,
-                    "You already have an order in progress for this event");
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Could not create the order");
         }
 
         if (fromWaitlist) {
@@ -177,6 +183,12 @@ public class OrderService {
     public TicketOrder cancel(Long userId, String orderNo) {
         TicketOrder order = loadOwned(userId, orderNo);
         Instant now = Instant.now(clock);
+
+        if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.COMPLETED) {
+            PaymentGateway.Charge refund = paymentGateway.refund(order.getOrderNo(), order.getTotalCents());
+            payments.save(new Payment(order.getId(), refund.providerRef(), refund.status(),
+                    order.getTotalCents(), now));
+        }
 
         order.transitionTo(OrderStatus.CANCELLED, now);
         inventory.release(order.getTierId(), order.getQuantity(), order.getId(),
@@ -234,12 +246,12 @@ public class OrderService {
         }
     }
 
-    private void requireWithinPurchaseLimit(TierPurchaseView tier, int quantity) {
+    private void requireWithinPurchaseLimit(TierPurchaseView tier, int alreadyHeld, int quantity) {
         if (quantity < 1) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Quantity must be at least 1");
         }
         int limit = Math.min(tier.maxPerUser(), properties.order().maxTicketsPerUserPerTier());
-        if (quantity > limit) {
+        if (alreadyHeld + quantity > limit) {
             throw new BusinessException(ErrorCode.PURCHASE_LIMIT_EXCEEDED,
                     "You can buy at most " + limit + " tickets in this tier");
         }

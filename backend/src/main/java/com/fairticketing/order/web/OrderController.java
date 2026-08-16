@@ -1,5 +1,8 @@
 package com.fairticketing.order.web;
 
+import com.fairticketing.inventory.repository.TicketTierRepository;
+import com.fairticketing.inventory.repository.WaitlistShowView;
+import com.fairticketing.order.domain.TicketOrder;
 import com.fairticketing.order.repository.TicketOrderRepository;
 import com.fairticketing.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -20,16 +23,26 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
 
     private final OrderService orders;
     private final TicketOrderRepository orderRepository;
+    private final TicketTierRepository tiers;
 
-    public OrderController(OrderService orders, TicketOrderRepository orderRepository) {
+    public OrderController(OrderService orders,
+                           TicketOrderRepository orderRepository,
+                           TicketTierRepository tiers) {
         this.orders = orders;
         this.orderRepository = orderRepository;
+        this.tiers = tiers;
     }
 
     /**
@@ -41,32 +54,50 @@ public class OrderController {
     public OrderResponse checkout(@AuthenticationPrincipal Jwt jwt,
                                   @RequestHeader("Idempotency-Key") String idempotencyKey,
                                   @Valid @RequestBody CheckoutRequest request) {
-        return OrderResponse.from(
-                orders.checkout(userId(jwt), request.tierId(), request.quantity(), idempotencyKey));
+        return toResponse(orders.checkout(userId(jwt), request.tierId(), request.quantity(), idempotencyKey));
     }
 
     @PostMapping("/{orderNo}/pay")
     public OrderResponse pay(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderNo) {
-        return OrderResponse.from(orders.pay(userId(jwt), orderNo));
+        return toResponse(orders.pay(userId(jwt), orderNo));
     }
 
     @PostMapping("/{orderNo}/cancel")
     public OrderResponse cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderNo) {
-        return OrderResponse.from(orders.cancel(userId(jwt), orderNo));
+        return toResponse(orders.cancel(userId(jwt), orderNo));
     }
 
     @GetMapping("/{orderNo}")
     public OrderResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderNo) {
-        return OrderResponse.from(orders.findOwned(userId(jwt), orderNo));
+        return toResponse(orders.findOwned(userId(jwt), orderNo));
     }
 
     @GetMapping
     public Page<OrderResponse> mine(@AuthenticationPrincipal Jwt jwt,
                                     @RequestParam(defaultValue = "0") int page,
                                     @RequestParam(defaultValue = "20") int size) {
-        return orderRepository
-                .findByUserIdOrderByCreatedAtDesc(userId(jwt), PageRequest.of(Math.max(0, page), Math.clamp(size, 1, 50)))
-                .map(OrderResponse::from);
+        Page<TicketOrder> ordersPage = orderRepository.findByUserIdOrderByCreatedAtDesc(
+                userId(jwt), PageRequest.of(Math.max(0, page), Math.clamp(size, 1, 50)));
+        Map<Long, WaitlistShowView> shows = showsByTier(ordersPage.getContent().stream()
+                .map(TicketOrder::getTierId)
+                .collect(Collectors.toSet()));
+        return ordersPage.map(order -> OrderResponse.from(order, shows.get(order.getTierId())));
+    }
+
+    private OrderResponse toResponse(TicketOrder order) {
+        return OrderResponse.from(order, show(order.getTierId()));
+    }
+
+    private WaitlistShowView show(Long tierId) {
+        return showsByTier(List.of(tierId)).get(tierId);
+    }
+
+    private Map<Long, WaitlistShowView> showsByTier(Collection<Long> tierIds) {
+        if (tierIds.isEmpty()) {
+            return Map.of();
+        }
+        return tiers.showViewsByTierIds(tierIds).stream()
+                .collect(Collectors.toMap(WaitlistShowView::tierId, Function.identity()));
     }
 
     private static Long userId(Jwt jwt) {

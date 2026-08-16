@@ -12,6 +12,7 @@ import com.fairticketing.inventory.domain.TicketTier;
 import com.fairticketing.inventory.repository.InventoryLedgerRepository;
 import com.fairticketing.inventory.repository.TicketTierRepository;
 import com.fairticketing.order.repository.TicketOrderRepository;
+import com.fairticketing.payment.domain.Payment;
 import com.fairticketing.payment.repository.PaymentRepository;
 import com.fairticketing.support.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
@@ -230,7 +231,14 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
                     .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
                     .andExpect(jsonPath("$.quantity").value(2))
                     .andExpect(jsonPath("$.totalCents").value(10_000))
-                    .andExpect(jsonPath("$.expiresAt").exists());
+                    .andExpect(jsonPath("$.expiresAt").exists())
+                    .andExpect(jsonPath("$.eventTitle").value("Live in Dublin"))
+                    .andExpect(jsonPath("$.artistName").value("The Silent Harbour"))
+                    .andExpect(jsonPath("$.tierName").value("Standing"))
+                    .andExpect(jsonPath("$.venueName").value("Test Arena"))
+                    .andExpect(jsonPath("$.city").value("Dublin"))
+                    .andExpect(jsonPath("$.startsAt").exists())
+                    .andExpect(jsonPath("$.venueTimezone").exists());
 
             assertThat(tiers.findById(standingTierId).orElseThrow().availableQuantity()).isEqualTo(48);
         }
@@ -275,16 +283,25 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
         }
 
         @Test
-        @DisplayName("one live order per event, even across different tiers")
-        void a_second_order_for_the_same_event_is_refused() throws Exception {
+        @DisplayName("a second order on another tier is allowed")
+        void a_second_order_for_the_same_event_is_allowed() throws Exception {
             checkout(buyerToken, standingTierId, 1, "key-1").andExpect(status().isCreated());
 
             checkout(buyerToken, seatedTierId, 1, "key-2")
-                    .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("DUPLICATE_ACTIVE_ORDER"));
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.tierId").value(seatedTierId));
+        }
 
-            // The stock taken for the refused order has to come back.
-            assertThat(tiers.findById(seatedTierId).orElseThrow().availableQuantity()).isEqualTo(20);
+        @Test
+        @DisplayName("tickets already held still count toward the per-tier cap")
+        void a_follow_up_order_cannot_exceed_the_tier_limit() throws Exception {
+            checkout(buyerToken, standingTierId, 3, "key-1").andExpect(status().isCreated());
+
+            checkout(buyerToken, standingTierId, 2, "key-2")
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("PURCHASE_LIMIT_EXCEEDED"));
+
+            assertThat(tiers.findById(standingTierId).orElseThrow().availableQuantity()).isEqualTo(47);
         }
 
         @Test
@@ -331,7 +348,9 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
             http.perform(get("/api/orders").header("Authorization", "Bearer " + buyerToken))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content.length()").value(1))
-                    .andExpect(jsonPath("$.content[0].orderNo").value(orderNo));
+                    .andExpect(jsonPath("$.content[0].orderNo").value(orderNo))
+                    .andExpect(jsonPath("$.content[0].eventTitle").value("Live in Dublin"))
+                    .andExpect(jsonPath("$.content[0].artistName").value("The Silent Harbour"));
         }
 
         @Test
@@ -345,6 +364,28 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
 
             assertThat(tiers.findById(standingTierId).orElseThrow().availableQuantity()).isEqualTo(50);
             assertThat(ledger.netDeltaForTier(standingTierId)).isZero();
+        }
+
+        @Test
+        @DisplayName("returning paid tickets restocks the tier and frees the one-order lock")
+        void returning_completed_tickets_puts_them_back_on_sale() throws Exception {
+            String orderNo = orderNoFrom(checkout(buyerToken, standingTierId, 2, "key-1"));
+            http.perform(post("/api/orders/" + orderNo + "/pay")
+                            .header("Authorization", "Bearer " + buyerToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+            http.perform(post("/api/orders/" + orderNo + "/cancel")
+                            .header("Authorization", "Bearer " + buyerToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+            assertThat(tiers.findById(standingTierId).orElseThrow().availableQuantity()).isEqualTo(50);
+            assertThat(payments.findAll()).anyMatch(payment ->
+                    payment.getStatus() == Payment.Status.REFUNDED);
+
+            checkout(buyerToken, standingTierId, 1, "key-after-return")
+                    .andExpect(status().isCreated());
         }
 
         @Test

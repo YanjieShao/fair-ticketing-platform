@@ -22,6 +22,17 @@ public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> 
 
     Optional<TicketOrder> findByActiveLockKey(String activeLockKey);
 
+    @Query("""
+            select coalesce(sum(o.quantity), 0)
+              from TicketOrder o
+             where o.userId = :userId
+               and o.tierId = :tierId
+               and o.status in :holding
+            """)
+    int sumOccupyingQuantity(@Param("userId") Long userId,
+                             @Param("tierId") Long tierId,
+                             @Param("holding") Collection<OrderStatus> holding);
+
     Page<TicketOrder> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     long countByTierId(Long tierId);

@@ -106,6 +106,13 @@ export type Order = {
   expiresAt: string | null
   paidAt: string | null
   completedAt: string | null
+  eventTitle: string | null
+  artistName: string | null
+  tierName: string | null
+  venueName: string | null
+  city: string | null
+  startsAt: string | null
+  venueTimezone: string
 }
 
 export type WaitlistEntry = {
@@ -120,6 +127,10 @@ export type WaitlistEntry = {
   offeredAt: string | null
   offerExpiresAt: string | null
   convertedOrderId: number | null
+  eventTitle: string | null
+  artistName: string | null
+  tierName: string | null
+  venueTimezone: string
 }
 
 export type WaitingRoom = {

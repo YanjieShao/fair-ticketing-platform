@@ -28,6 +28,17 @@ public interface TicketTierRepository extends JpaRepository<TicketTier, Long> {
             """)
     Optional<TierPurchaseView> findPurchaseView(@Param("id") Long id);
 
+    @Query("""
+            select new com.fairticketing.inventory.repository.WaitlistShowView(
+                       t.id, t.name, e.id, e.title, a.name, v.name, v.city, e.startsAt, v.timezone)
+              from TicketTier t
+              join t.event e
+              join e.artist a
+              join e.venue v
+             where t.id in :tierIds
+            """)
+    List<WaitlistShowView> showViewsByTierIds(@Param("tierIds") Collection<Long> tierIds);
+
     @Query("select t.id from TicketTier t where t.event.status in :statuses")
     List<Long> findIdsByEventStatuses(@Param("statuses") Collection<EventStatus> statuses);
 

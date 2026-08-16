@@ -17,12 +17,18 @@ export function OrderPage() {
 
   const pay = useMutation({
     mutationFn: () => api<Order>(`/api/orders/${orderNo}/pay`, { method: 'POST' }),
-    onSuccess: (updated) => queryClient.setQueryData(['order', orderNo], updated),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['order', orderNo], updated)
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
   })
 
   const cancel = useMutation({
     mutationFn: () => api<Order>(`/api/orders/${orderNo}/cancel`, { method: 'POST' }),
-    onSuccess: (updated) => queryClient.setQueryData(['order', orderNo], updated),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['order', orderNo], updated)
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
   })
 
   if (order.isLoading) {
@@ -34,17 +40,34 @@ export function OrderPage() {
 
   const current = order.data
   const canPay = current.status === 'PENDING_PAYMENT' || current.status === 'CREATED'
+  const canReturn = current.status === 'PAID' || current.status === 'COMPLETED'
+  const showTitle = current.eventTitle ?? `Event ${current.eventId}`
+  const venueLine = [current.venueName, current.city].filter(Boolean).join(', ')
 
   return (
-    <article>
-      <p className="eyebrow">Order {current.orderNo}</p>
-      <h1>{formatCents(current.totalCents)}</h1>
+    <article className="ticket">
+      {current.artistName ? <p className="eyebrow">{current.artistName}</p> : null}
+      <h1>
+        <Link to={`/events/${current.eventId}`}>{showTitle}</Link>
+      </h1>
+      {venueLine ? <p>{venueLine}</p> : null}
+      {current.startsAt ? (
+        <p className="muted">{formatInstant(current.startsAt, current.venueTimezone)}</p>
+      ) : null}
+
       <p>
-        {current.quantity} ticket{current.quantity === 1 ? '' : 's'} · <StatusChip>{current.status}</StatusChip>
+        {current.tierName ?? `Tier ${current.tierId}`} · {current.quantity} ticket
+        {current.quantity === 1 ? '' : 's'} · {formatCents(current.totalCents)} ·{' '}
+        <StatusChip>{current.status}</StatusChip>
       </p>
-      <p className="muted">Held {formatInstant(current.createdAt)}</p>
+      <p className="muted mono">
+        {current.orderNo} · held {formatInstant(current.createdAt, current.venueTimezone)}
+      </p>
       {current.expiresAt && canPay ? (
-        <p>Pay before {formatInstant(current.expiresAt)} or the hold is released.</p>
+        <p>
+          Confirm before {formatInstant(current.expiresAt, current.venueTimezone)} or the
+          reservation is released.
+        </p>
       ) : null}
 
       <ApiErrorBanner error={pay.error} />
@@ -53,11 +76,23 @@ export function OrderPage() {
       {canPay ? (
         <div className="actions">
           <button type="button" disabled={pay.isPending} onClick={() => pay.mutate()}>
-            Pay now
+            Confirm
           </button>
           <button type="button" className="ghost" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
-            Cancel hold
+            Cancel
           </button>
+        </div>
+      ) : null}
+
+      {canReturn ? (
+        <div className="actions">
+          <button type="button" className="ghost" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+            Return tickets
+          </button>
+          <p className="muted">
+            Payment is mocked. Returning restocks the tier and offers the waitlist; no money is
+            sent.
+          </p>
         </div>
       ) : null}
 

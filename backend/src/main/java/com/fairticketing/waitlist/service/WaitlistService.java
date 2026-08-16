@@ -9,6 +9,7 @@ import com.fairticketing.inventory.repository.TicketTierRepository;
 import com.fairticketing.inventory.repository.TierPurchaseView;
 import com.fairticketing.inventory.service.InventoryService;
 import com.fairticketing.notification.service.NotificationService;
+import com.fairticketing.order.domain.OrderStatus;
 import com.fairticketing.order.repository.TicketOrderRepository;
 import com.fairticketing.waitlist.domain.WaitlistEntry;
 import com.fairticketing.waitlist.domain.WaitlistStatus;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -69,9 +71,8 @@ public class WaitlistService {
         }
 
         int limit = Math.min(tier.maxPerUser(), properties.order().maxTicketsPerUserPerTier());
-        if (quantity < 1 || quantity > limit) {
-            throw new BusinessException(ErrorCode.PURCHASE_LIMIT_EXCEEDED,
-                    "You can waitlist at most " + limit + " tickets in this tier");
+        if (quantity < 1) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Quantity must be at least 1");
         }
 
         if (inventory.remaining(tierId) >= quantity) {
@@ -79,15 +80,16 @@ public class WaitlistService {
                     "Tickets are still available in this tier");
         }
 
-        if (orders.findByActiveLockKey(userId + ":" + tier.eventId()).isPresent()) {
-            throw new BusinessException(ErrorCode.DUPLICATE_ACTIVE_ORDER,
-                    "You already have an order in progress for this event");
-        }
-
         // Serialises position assignment on the tier row, the same row checkout
         // already contends on, so we do not invent a second lock order.
         tiers.findByIdForUpdate(tierId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Ticket tier " + tierId + " not found"));
+        int alreadyHeld = orders.sumOccupyingQuantity(userId, tierId, EnumSet.of(
+                OrderStatus.CREATED, OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.COMPLETED));
+        if (alreadyHeld + quantity > limit) {
+            throw new BusinessException(ErrorCode.PURCHASE_LIMIT_EXCEEDED,
+                    "You can waitlist at most " + limit + " tickets in this tier");
+        }
 
         long position = entries.maxPositionSeq(tierId) + 1;
         WaitlistEntry entry = WaitlistEntry.join(

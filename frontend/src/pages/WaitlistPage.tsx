@@ -58,13 +58,20 @@ export function WaitlistPage() {
           <li key={entry.id} className="wait-row">
             <div>
               <StatusChip>{entry.status}</StatusChip>
+              <h2>
+                <Link to={`/events/${entry.eventId}`}>
+                  {entry.eventTitle ?? `Event ${entry.eventId}`}
+                  {entry.artistName ? ` (${entry.artistName})` : ''}
+                </Link>
+              </h2>
               <p>
-                {entry.requestedQuantity} ticket{entry.requestedQuantity === 1 ? '' : 's'} · joined{' '}
-                {formatInstant(entry.createdAt)}
+                {entry.tierName ?? `Tier ${entry.tierId}`} · {entry.requestedQuantity} ticket
+                {entry.requestedQuantity === 1 ? '' : 's'} · joined{' '}
+                {formatInstant(entry.createdAt, entry.venueTimezone)}
               </p>
               {entry.status === 'WAITING' ? <p>{entry.peopleAhead} ahead of you</p> : null}
               {entry.status === 'OFFERED' && entry.offerExpiresAt ? (
-                <p>Buy before {formatInstant(entry.offerExpiresAt)}</p>
+                <p>Buy before {formatInstant(entry.offerExpiresAt, entry.venueTimezone)}</p>
               ) : null}
             </div>
             <div className="actions">

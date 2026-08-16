@@ -1,5 +1,6 @@
 package com.fairticketing.order.web;
 
+import com.fairticketing.inventory.repository.WaitlistShowView;
 import com.fairticketing.order.domain.OrderStatus;
 import com.fairticketing.order.domain.TicketOrder;
 
@@ -16,9 +17,16 @@ public record OrderResponse(
         Instant createdAt,
         Instant expiresAt,
         Instant paidAt,
-        Instant completedAt) {
+        Instant completedAt,
+        String eventTitle,
+        String artistName,
+        String tierName,
+        String venueName,
+        String city,
+        Instant startsAt,
+        String venueTimezone) {
 
-    public static OrderResponse from(TicketOrder order) {
+    public static OrderResponse from(TicketOrder order, WaitlistShowView show) {
         return new OrderResponse(
                 order.getOrderNo(),
                 order.getEventId(),
@@ -30,6 +38,15 @@ public record OrderResponse(
                 order.getCreatedAt(),
                 order.getExpiresAt(),
                 order.getPaidAt(),
-                order.getCompletedAt());
+                order.getCompletedAt(),
+                show == null ? null : show.eventTitle(),
+                show == null ? null : show.artistName(),
+                show == null ? null : show.tierName(),
+                show == null ? null : show.venueName(),
+                show == null ? null : show.city(),
+                show == null ? null : show.startsAt(),
+                show == null || show.venueTimezone() == null || show.venueTimezone().isBlank()
+                        ? "UTC"
+                        : show.venueTimezone());
     }
 }

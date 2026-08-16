@@ -89,6 +89,13 @@ describe('EventDetailPage', () => {
       if (url === '/api/events/1/recommendations') {
         return { status: 200, ok: true, text: async () => JSON.stringify([]) }
       }
+      if (url === '/api/orders' && (!init?.method || init.method === 'GET')) {
+        return {
+          status: 200,
+          ok: true,
+          text: async () => JSON.stringify({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }),
+        }
+      }
       if (url === '/api/orders') {
         return {
           status: 201,
@@ -106,6 +113,13 @@ describe('EventDetailPage', () => {
               expiresAt: '2026-08-14T12:10:00Z',
               paidAt: null,
               completedAt: null,
+              eventTitle: 'Live in Dublin',
+              artistName: 'The Silent Harbour',
+              tierName: 'Standing',
+              venueName: 'Test Arena',
+              city: 'Dublin',
+              startsAt: '2026-09-01T19:00:00Z',
+              venueTimezone: 'Europe/Dublin',
             }),
         }
       }
@@ -116,10 +130,12 @@ describe('EventDetailPage', () => {
     const user = userEvent.setup()
     renderDetail()
 
-    await user.click(await screen.findByRole('button', { name: 'Hold tickets' }))
+    await user.click(await screen.findByRole('button', { name: 'Purchase' }))
     expect(await screen.findByText('Held')).toBeInTheDocument()
 
-    const checkoutCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/orders')
+    const checkoutCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/orders' && init?.method === 'POST',
+    )
     expect(checkoutCall).toBeTruthy()
     const headers = checkoutCall![1]!.headers as Headers
     expect(headers.get('Idempotency-Key')).toMatch(
@@ -138,6 +154,13 @@ describe('EventDetailPage', () => {
         if (url === '/api/events/1/recommendations') {
           return { status: 200, ok: true, text: async () => JSON.stringify([]) }
         }
+        if (url === '/api/orders') {
+          return {
+            status: 200,
+            ok: true,
+            text: async () => JSON.stringify({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }),
+          }
+        }
         if (url === '/api/waitlist') {
           return {
             status: 201,
@@ -155,6 +178,10 @@ describe('EventDetailPage', () => {
                 offeredAt: null,
                 offerExpiresAt: null,
                 convertedOrderId: null,
+                eventTitle: 'Live in Dublin',
+                artistName: 'EXO',
+                tierName: 'Standing',
+                venueTimezone: 'Europe/Dublin',
               }),
           }
         }
@@ -190,6 +217,13 @@ describe('EventDetailPage', () => {
         }
         if (String(input) === '/api/events/1/recommendations') {
           return { status: 200, ok: true, text: async () => JSON.stringify([]) }
+        }
+        if (String(input) === '/api/orders') {
+          return {
+            status: 200,
+            ok: true,
+            text: async () => JSON.stringify({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }),
+          }
         }
         throw new Error(`unexpected ${String(input)}`)
       }),

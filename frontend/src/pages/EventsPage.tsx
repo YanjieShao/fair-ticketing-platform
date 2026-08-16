@@ -51,7 +51,7 @@ export function EventsPage() {
   return (
     <section>
       <header className="page-head">
-        <p className="eyebrow">On sale</p>
+        <p className="eyebrow">Box office</p>
         <h1>Find a show</h1>
       </header>
 

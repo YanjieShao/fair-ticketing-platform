@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -29,6 +31,7 @@ public class NotificationService {
         this.clock = clock;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void notifyUser(Long userId,
                            String type,
                            String title,
@@ -37,6 +40,7 @@ public class NotificationService {
         write(userId, type, "INFO", title, body, null, "ORDER_EVENT", "TEMPLATE", dedupeKey);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void notifyInsight(Long userId,
                               String title,
                               String body,
@@ -55,6 +59,9 @@ public class NotificationService {
                        String sourceType,
                        String generatedBy,
                        String dedupeKey) {
+        if (notifications.existsByDedupeKey(dedupeKey)) {
+            return;
+        }
         try {
             notifications.save(new Notification(
                     userId,

@@ -59,10 +59,10 @@ public class TicketOrder {
 
     /**
      * Set while the order occupies inventory and cleared once it does not.
-     * A unique index on this column is what stops a user from holding two
-     * live orders for the same event; MySQL ignores NULLs in unique indexes.
+     * Kept for queries and the waitlist; the per-tier cap is enforced in
+     * checkout by summing occupying quantity, not by a unique index.
      */
-    @Column(name = "active_lock_key", unique = true, length = 64)
+    @Column(name = "active_lock_key", length = 64)
     private String activeLockKey;
 
     @Column(name = "created_at", nullable = false)
@@ -130,6 +130,6 @@ public class TicketOrder {
     }
 
     public boolean isExpiredAt(Instant now) {
-        return expiresAt != null && !status.isTerminal() && now.isAfter(expiresAt);
+        return expiresAt != null && status.canExpire() && now.isAfter(expiresAt);
     }
 }

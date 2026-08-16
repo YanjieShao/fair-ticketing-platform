@@ -76,7 +76,7 @@ export function WaitingRoomPage() {
       )}
 
       <p>
-        <Link to={`/events/${eventId}`}>Leave and go back</Link>
+        <Link to="/">Leave and go back to shows</Link>
       </p>
     </section>
   )

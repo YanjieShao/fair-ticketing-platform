@@ -1,14 +1,18 @@
 :root {
-  --bg: #14110c;
-  --paper: #f3ead7;
-  --ink: #1c1610;
-  --muted: #6f675c;
-  --red: #c4452d;
-  --line: #2c261d;
-  --chip: #2a231b;
-  font-family: Figtree, "Segoe UI", sans-serif;
+  --bg: #efe6d4;
+  --paper: #fffdf7;
+  --ink: #1c1914;
+  --muted: #6b6458;
+  --red: #b42318;
+  --line: #c9bda6;
+  --chip: #fffdf7;
+  --ok: #2f5d3a;
+  --warn: #8a4b12;
+  --shadow: 3px 3px 0 #1c1914;
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   line-height: 1.45;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -28,7 +32,13 @@ body,
 
 body {
   background:
-    radial-gradient(1200px 400px at 10% -10%, #2a1c12, transparent),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 11px,
+      rgba(28, 25, 20, 0.035) 11px,
+      rgba(28, 25, 20, 0.035) 12px
+    ),
     var(--bg);
 }
 
@@ -39,18 +49,19 @@ a {
 h1,
 h2,
 .wordmark {
-  font-family: Fraunces, Georgia, serif;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-size: clamp(2rem, 4vw, 2.8rem);
   margin: 0 0 0.4rem;
+  text-wrap: balance;
 }
 
 h2 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   margin: 0 0 0.25rem;
 }
 
@@ -65,26 +76,44 @@ h2 {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 1rem;
   margin-bottom: 2rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: var(--shadow);
 }
 
 .wordmark {
-  font-size: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   text-decoration: none;
+}
+
+.wordmark::before {
+  content: "FT";
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--ink);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
 }
 
 nav {
   display: flex;
-  gap: 1rem;
+  gap: 0.9rem;
   align-items: center;
   flex-wrap: wrap;
 }
 
 nav a,
 .linkish {
-  color: var(--paper);
+  color: var(--ink);
   text-decoration: none;
   background: none;
   border: 0;
@@ -93,22 +122,35 @@ nav a,
   cursor: pointer;
 }
 
+nav a:hover,
+.linkish:hover,
+main a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 nav a.active {
   text-decoration: underline;
   text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
 }
 
 .cta {
   background: var(--red);
   color: var(--paper);
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--ink);
+}
+
+.eyebrow,
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
   color: var(--muted);
   margin-bottom: 0.35rem;
 }
@@ -148,30 +190,44 @@ button {
 
 input,
 select {
-  background: #1d1812;
-  color: var(--paper);
-  border: 1px solid var(--line);
-  padding: 0.55rem 0.7rem;
-  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  padding: 0.5rem 0.65rem;
+  border-radius: 0;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
 }
 
 button {
   background: var(--red);
   color: var(--paper);
-  border: 0;
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
+  border: 1px solid var(--ink);
+  padding: 0.55rem 0.95rem;
+  border-radius: 0;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+button:hover:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 button.ghost {
-  background: transparent;
-  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .show-list,
@@ -181,35 +237,48 @@ button.ghost {
   padding: 0;
   margin: 1.5rem 0;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
 .show-card,
 .tier,
 .wait-row,
 .queue-card,
-.row-link {
+.row-link,
+.ticket,
+.insight,
+.kpi,
+.chart-panel {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--ink);
+  background: var(--paper);
   text-decoration: none;
-  background: #1a1611;
+  box-shadow: var(--shadow);
+}
+
+.show-card,
+.row-link {
+  align-items: stretch;
 }
 
 .show-meta {
   text-align: right;
+  min-width: 7.5rem;
+  padding-left: 1rem;
+  border-left: 1px dashed var(--ink);
 }
 
 .chip {
   display: inline-block;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid var(--ink);
   background: var(--chip);
 }
 
@@ -217,32 +286,58 @@ button.ghost {
 .chip-expired,
 .chip-cancelled,
 .chip-offer-expired {
-  color: #e8b4a8;
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .chip-on-sale,
 .chip-admitted,
 .chip-completed,
 .chip-converted,
-.chip-offered {
-  color: #d7e3c0;
+.chip-offered,
+.chip-paid {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.chip-pending-payment,
+.chip-created,
+.chip-waiting,
+.chip-high {
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .banner {
-  background: #3a1c16;
-  border: 1px solid #7a3a2c;
+  background: #f8e6e2;
+  border: 1px solid var(--red);
   padding: 0.7rem 0.9rem;
-  border-radius: 8px;
+  color: var(--ink);
 }
 
 .narrow {
   max-width: 28rem;
 }
 
+.ticket {
+  display: block;
+  padding: 1.4rem 1.5rem 1.2rem;
+}
+
+.ticket h1 a {
+  text-decoration: none;
+}
+
+.queue-card {
+  display: block;
+  max-width: 28rem;
+}
+
 .queue-card .position {
-  font-family: Fraunces, Georgia, serif;
-  font-size: 4rem;
-  margin: 0.4rem 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 4.2rem;
+  line-height: 1;
+  margin: 0.5rem 0 0.35rem;
 }
 
 .page-head {
@@ -250,11 +345,8 @@ button.ghost {
 }
 
 .insight {
+  display: block;
   margin: 1.25rem 0;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #1a1611;
 }
 
 .insight .eyebrow {
@@ -276,21 +368,18 @@ button.ghost {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-  gap: 0.75rem;
+  gap: 0.85rem;
   margin-bottom: 1.5rem;
 }
 
 .kpi,
 .chart-panel {
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #1a1611;
+  display: block;
 }
 
 .kpi-value {
-  font-family: Fraunces, Georgia, serif;
-  font-size: 1.7rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 1.55rem;
   margin: 0.15rem 0 0.25rem;
 }
 
@@ -310,27 +399,32 @@ button.ghost {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
 }
 
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 0.55rem 0.4rem;
+  padding: 0.6rem 0.7rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
 
 .data-table th {
-  font-size: 0.75rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  background: #f4efe3;
 }
 
 fieldset {
-  border: 1px solid var(--line);
+  border: 1px solid var(--ink);
   padding: 0.75rem;
   margin: 0;
+  background: var(--paper);
 }
 
 label.inline {
@@ -344,4 +438,27 @@ label.inline {
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.wait-row {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .masthead,
+  .show-card,
+  .tier,
+  .wait-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .show-meta {
+    text-align: left;
+    min-width: 0;
+    padding-left: 0;
+    padding-top: 0.75rem;
+    border-left: 0;
+    border-top: 1px dashed var(--ink);
+  }
 }

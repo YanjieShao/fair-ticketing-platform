@@ -10,6 +10,8 @@ public interface PaymentGateway {
 
     Charge charge(String orderNo, int amountCents);
 
+    Charge refund(String orderNo, int amountCents);
+
     record Charge(String providerRef, Payment.Status status) {
 
         public boolean succeeded() {
