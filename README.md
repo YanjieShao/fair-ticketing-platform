@@ -1,8 +1,8 @@
 # Fair Ticketing Platform
 
-A concert ticketing backend built around the problems that break real on-sale
-events: tickets vanishing in seconds, overselling, duplicate orders, bots, and
-fans left with no idea where they stand.
+A concert ticketing system built around the problems that break real on-sales:
+tickets vanishing in seconds, overselling, duplicate orders, bots, and fans
+left with no idea where they stand.
 
 ## What "fair" means here
 
@@ -18,36 +18,17 @@ The name commits the system to three mechanisms, each of which is testable:
    A script cannot obtain more than a human, and a retried request cannot
    produce a second order.
 
-## Status
+## Quickstart
 
-A buyer can browse events, enter a waiting room automatically on a high-demand
-show, purchase tickets, confirm or cancel the reservation, or return a
-completed order (mock refund: restock plus waitlist, no card movement). A
-second order on the same event is allowed until the per-tier cap is reached. Search covers artist, city, category, date, and price, and
-paginates. Unpaid holds are returned automatically. The waiting room
-UI listens on SSE and falls back to polling if the stream drops. Checkout, waitlist
-join, and waiting-room join are capped per account; a short burst from the
-same user is treated as anomalous and returns 429. Three inventory
-strategies sit behind the same interface and must each pass the same concurrency
-test. Cancelled and expired tickets are offered to the waitlist in join order.
-Offers also land in the in-app inbox. A scheduled job forecasts demand for
-upcoming shows and turns the waiting room on when expected demand exceeds
-capacity. Another job turns those (and live sales) numbers into operator copy:
-the LLM only phrases figures the backend already computed, and a template is
-used when no API key is set. Sold-out shows recommend other on-sale events of
-the same genre; city and price only break ties. Admins get a sales dashboard of
-those same aggregates, plotted with Recharts, and can list a new show from the
-admin UI.
-
-## Requirements
+### Requirements
 
 - Java 21
 - Maven 3.9+ (or the wrapper in `backend/`)
-- Node 22+ (for the UI)
-- Python 3.12+ (for the demand model; Anaconda 3.12 on this machine)
-- Docker (Colima, Docker Desktop, or any engine Testcontainers can reach)
+- Node 22+
+- Python 3.12+ (only if you want the demand model)
+- Docker (Colima, Docker Desktop, or any engine Compose and Testcontainers can reach)
 
-## Running
+### Running
 
 ```bash
 git clone <your-fork-url>
@@ -58,6 +39,12 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
+If Maven is not using Java 21:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+```
+
 In a second terminal:
 
 ```bash
@@ -66,200 +53,31 @@ npm install
 npm run dev
 ```
 
-The Vite server at http://localhost:5173 proxies `/api` to the backend on 8080.
+Open http://localhost:5173. Vite proxies `/api` to the backend on 8080.
 
-Sign in as `admin@fairticketing.local` / `password123` for the dashboard,
-or create a buyer account from the UI. The admin row is created on startup if
-it is missing.
-
-The demand model is a separate process. After seeding, run it and ask the
-backend to score upcoming shows:
-
-```bash
-cd ml-service
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --port 8090
-```
-
-Then, with the backend already running on seeded data:
-
-```bash
-export FT_FORECAST_ON_START=true
-# or POST /api/admin/forecasts/run as admin@fairticketing.local / password123
-# Insights follow automatically on that same startup pass, or:
-# POST /api/admin/insights/run
-```
-
-To see the waiting room actually gate checkout, also set
-`FT_WAITING_ROOM_ENABLED=true`. The forecast decides which events use it; the
-global switch is the load-test kill switch.
-
-If more than one JDK is installed, point Maven at 21. On this machine that is:
-
-```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-```
+Sign in as `admin@fairticketing.local` / `password123` for the dashboard, or
+create a buyer account from the UI. The admin row is created on startup if it
+is missing.
 
 `docker-compose.yml` uses local demo credentials (`ticketing` / `ticketing`).
 Do not reuse them anywhere public.
 
-## Testing
+The demand model, waiting room, and seed history are optional for a first
+run. How to turn them on: [backend/README.md](backend/README.md),
+[ml-service/README.md](ml-service/README.md), and
+[docs/seed-data.md](docs/seed-data.md).
 
-Unit tests need nothing but a JVM:
+### Architecture
 
-```bash
-cd backend
-./mvnw test
-```
-
-The UI tests run in Vitest and do not need the backend:
-
-```bash
-cd frontend
-npm test
-```
-
-Playwright covers the buyer's main path (search, register, purchase, confirm). It
-expects MySQL, Redis, and the API on :8080, then starts Vite if needed:
-
-```bash
-cd frontend
-npx playwright install chromium   # once
-npm run e2e
-```
-
-The model service:
-
-```bash
-cd ml-service
-pytest
-```
-
-Tests named `*IT` start a real MySQL and Redis through Testcontainers and run
-under `mvn verify`. GitHub Actions already has a Docker socket where
-Testcontainers expects it. On Colima, point the tests at the VM first:
-
-```bash
-export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
-export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
-./mvnw verify
-```
-
-Two of them carry most of the weight. `AbstractCheckoutConcurrencyIT` puts 500
-buyers in a race for 100 tickets and asserts not only that exactly 100 sell, but
-that every buyer who missed out was turned away for being too late rather than
-because the system dropped their request; it runs once per inventory strategy.
-`BuyingTicketsApiIT` drives the same flow over HTTP through the real security
-filters. `WaitingRoomCheckoutIT` checks that a queue-jumper cannot buy.
-`WaitlistCheckoutIT` checks that a cancelled ticket is held for the next person
-in line rather than whoever hits checkout first.
-
-## API
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/auth/register`, `/api/auth/login` | none | obtain a token |
-| GET | `/api/events` | none | search by city, artist, category, date, price |
-| GET | `/api/events/{id}` | none | tiers, remaining stock, latest demand forecast and sales insight |
-| GET | `/api/events/{id}/recommendations` | none | same-genre shows still on sale |
-| GET | `/api/notifications` | buyer | waitlist offers and sales briefs for this account |
-| GET | `/api/admin/dashboard` | admin | live sales, waitlist, order, and forecast totals |
-| POST | `/api/admin/events` | admin | create a show (draft or on sale) |
-| POST | `/api/admin/events/{id}/publish` | admin | DRAFT → ON_SALE |
-| POST | `/api/admin/events/{id}/cancel` | admin | take down a draft only |
-| GET | `/api/admin/insights` | admin | latest sales briefings |
-| POST | `/api/admin/insights/run` | admin | phrase live sales numbers (LLM or template) |
-| POST | `/api/waiting-room/{eventId}/join` | buyer | take a place in line |
-| GET | `/api/waiting-room/{eventId}` | buyer | position; still what moves the line if nobody is streaming |
-| GET | `/api/waiting-room/{eventId}/stream` | buyer | SSE of the same payload until admitted |
-| DELETE | `/api/waiting-room/{eventId}` | buyer | give up a place |
-| POST | `/api/waitlist` | buyer | join after a tier sells out |
-| GET | `/api/waitlist`, `/api/waitlist/{id}` | buyer | place in line and offer window |
-| DELETE | `/api/waitlist/{id}` | buyer | leave the queue |
-| POST | `/api/orders` | buyer | reserve a tier, requires `Idempotency-Key` |
-| POST | `/api/orders/{orderNo}/pay` | buyer | confirm through the mock provider |
-| POST | `/api/orders/{orderNo}/cancel` | buyer | release a hold or return paid tickets |
-| GET | `/api/orders`, `/api/orders/{orderNo}` | buyer | history, including show, artist, venue, and tier |
-
-### Errors
-
-Every failure, including the ones rejected by security filters before any
-controller runs, comes back in one shape:
-
-```json
-{ "code": "SOLD_OUT", "message": "Not enough tickets left in this tier", "timestamp": "..." }
-```
-
-`code` is the stable part and the one clients should branch on. Losing a race
-for a ticket is an ordinary outcome rather than a fault, so those answer 409
-with a code that says which rule stopped the buyer: `SOLD_OUT`,
-`PURCHASE_LIMIT_EXCEEDED`, `EVENT_NOT_ON_SALE`. The per-user cap is the sum of
-tickets already held on that tier, not one order per event.
-Jumping the waiting room answers 403 with `WAITING_ROOM_TOKEN_REQUIRED`.
-A 500 means the server genuinely broke, and nothing a client can send should
-produce one.
-
-## Configuration
-
-Secrets and switches come from the environment. The defaults in
-`application.yml` are for local development only. Copy `.env.example` and set
-`FT_JWT_SECRET` to something private before this is reachable from anywhere
-other than your laptop.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `FT_JWT_SECRET` | dev placeholder | HMAC key for access tokens |
-| `FT_INVENTORY_STRATEGY` | `DB_PESSIMISTIC_LOCK` | which reserver to use |
-| `FT_WAITING_ROOM_ENABLED` | `false` | gate checkout behind the queue |
-| `FT_PAYMENT_FAILURE_RATE` | `0.0` | forces declined payments for demos |
-| `FT_SEED_ENABLED` | `false` | generates the synthetic sales history |
-| `FT_CORS_ORIGINS` | `http://localhost:5173` | browser origins allowed to call the API directly |
-| `FT_ML_BASE_URL` | `http://localhost:8090` | Python demand model |
-| `FT_FORECAST_ON_START` | `false` | run a forecast pass when the backend boots |
-| `FT_INSIGHTS_ON_START` | `false` | run an insight pass when the backend boots |
-| `FT_LOADTEST_ENABLED` | `false` | local stampede fixture; never on a public process |
-| `FT_RATE_LIMIT_ENABLED` | `true` | per-account caps on checkout and join |
-| `OPENAI_API_KEY` | empty | optional; blank uses the template composer |
-
-## Seed data
-
-A new platform has no sales history, so the forecasting model would have nothing
-to learn from and every dashboard would be empty. `SyntheticDataGenerator` builds
-that history: artists with a popularity score, venues, past and upcoming events,
-ticket tiers, and the individual orders behind them, placed along a sales curve
-that front-loads the events in demand.
-
-```bash
-FT_SEED_ENABLED=true ./mvnw spring-boot:run
-```
-
-It runs once and skips if data is already present. The random seed is fixed, so
-the dataset is reproducible. The result separates cleanly along the feature the
-model is meant to pick up:
-
-| Artist tier | Tiers | Mean sell-through | Sold out |
-| --- | --- | --- | --- |
-| Headliner | 91 | 1.00 | 98.9% |
-| Long tail | 372 | 0.62 | 18.5% |
-
-Note that sales are censored at capacity: a headliner that sells out tells us
-demand was *at least* the house size, not what it actually was. That is precisely
-why the model forecasts demand from the features rather than fitting past sales.
-
-## Architecture
-
-A modular monolith. Splitting into microservices would add operational work
-without buying anything at this size; the one process that does live on its own
-is the Python model service, because it is a different language runtime.
+A modular monolith. The Python model is the only separate process, because it
+is a different language runtime. Checkout never calls it.
 
 ```
 backend/src/main/java/com/fairticketing/
-├── common/         cross-cutting: errors, clock, rate limiting
+├── common/         errors, clock, rate limiting
 ├── auth/           registration, login, JWT, roles
 ├── event/          artists, venues, events, search
-├── inventory/      ticket tiers and stock, interchangeable reservers
+├── inventory/      ticket tiers and three interchangeable reservers
 ├── waitingroom/    virtual waiting room
 ├── order/          checkout, state machine, expiry
 ├── payment/        mock payment provider
@@ -269,98 +87,28 @@ backend/src/main/java/com/fairticketing/
 ├── notification/   transactional and insight-driven messages
 ```
 
-`audit_logs` exists in the schema for later, but there is no audit package in v1.
-Stock movements are already append-only in `inventory_ledger`.
+Inventory strategies, lock order, and why inference stays off the hot path:
+[docs/architecture.md](docs/architecture.md).
 
-### Inventory: three implementations, on purpose
+### Testing
 
-`InventoryReserver` is implemented three ways, selected by
-`ticketing.inventory.strategy`, so the load test can measure them instead of
-relying on an argument about which is faster:
+```bash
+cd backend && ./mvnw test          # unit tests, JVM only
+cd backend && ./mvnw verify        # also the MySQL/Redis integration tests
+cd frontend && npm test            # Vitest
+cd frontend && npm run e2e         # Playwright; needs the API on :8080
+cd ml-service && pytest
+```
 
-| Strategy | How stock is held |
+Colima, Testcontainers, and what the concurrency tests actually assert:
+[backend/README.md](backend/README.md).
+
+## Further reading
+
+| Topic | Where |
 | --- | --- |
-| `DB_PESSIMISTIC_LOCK` | `SELECT ... FOR UPDATE`, read, decide, write |
-| `DB_CONDITIONAL_UPDATE` | one `UPDATE` whose `WHERE` clause is the oversell guard |
-| `REDIS_LUA` | atomic decrement in a Lua script, reconciled against the database |
-
-Every strategy has to pass the same concurrency test. Redis holds the
-authoritative counter on the hot path; the database keeps the durable record,
-and a scheduled job reconciles the two, treating the ledger as correct.
-
-### Checkout takes the contended lock first
-
-Inserting an order row takes a shared lock on the ticket tier it references,
-because of the foreign key. Reserving stock needs an exclusive lock on that same
-row. Doing them in that order means concurrent buyers each sit on a shared lock
-while waiting to upgrade it, which is a deadlock: an early version of this code
-lost 400 of 500 sales that way.
-
-Reserving before inserting makes every transaction take the contended row first,
-so buyers queue instead of colliding. The audit entry is written after the order
-exists; both happen in one transaction, so they cannot disagree.
-
-### Rate limits are per account, not per IP
-
-Checkout, waitlist join, and waiting-room join share a Redis counter keyed by
-user id. Defaults are 8 checkouts a minute, 20 joins a minute, and 5 of those
-writes in any 10 seconds. The short window is the anomaly detector: a script
-on one account trips 429 `RATE_LIMITED` before a person retrying a slow page
-would. Browse and waiting-room polling are not capped. The 10k stampede sends
-one request per buyer, so it does not hit this path.
-
-### Every stock movement is written down
-
-`inventory_ledger` is append-only and records the reason for each change. Once
-Redis owns the hot counter, this is what reconciliation replays to decide which
-side drifted.
-
-### Time is injected
-
-Nothing calls `LocalDateTime.now()` directly. A `java.time.Clock` bean is
-injected everywhere, so payment windows and offer expiry can be tested without
-sleeping.
-
-### Model inference is off the hot path
-
-Demand forecasting runs as a scheduled batch job that writes to
-`demand_forecasts`. Request handling only reads that table, so the Python
-service being slow or down cannot affect checkout. A HIGH forecast is what
-turns `waiting_room_enabled` on for that event.
-
-Sales insights work the same way. The backend computes sold percent, hours on
-sale, and waitlist pressure; an LLM (or a template if `OPENAI_API_KEY` is
-blank) only writes the paragraph. The prompt forbids inventing numbers, and
-copy that does not cite the computed sold percent is discarded. Results land
-in `ai_insights` and are what the event page and admin Insights view read.
-
-Waitlist recommendations are content-based because a new platform has no
-purchase graph. Same genre is required; city, category, and price within 30%
-only rank the shortlist. The scorer is a plain Java class, and checkout never
-calls it.
-
-The admin dashboard is the same idea in a different shape: JDBC aggregates
-sell-through, waitlist pressure, paid revenue, order status, category mix, and
-the last 14 days of paid tickets. Recharts only draws those arrays.
-
-Prometheus and Grafana would graph *process* metrics (request rate, p99, JVM,
-MySQL) for operators. They are not the sales dashboard and stay optional — skip
-them unless you specifically want an ops console.
-
-Admins can also list a show from `/admin/events/new`. Only a draft can be
-taken down; once tickets are on sale, cancellation is out of scope. Buyers
-read waitlist offers from `/notifications` as well as the waitlist page.
-
-## Load test targets
-
-| Metric | Target | Measured (2026-08-14, this laptop) |
-| --- | --- | --- |
-| Inventory | 30,000 tickets | 30,000 on the headline run |
-| Concurrent buyers | 10,000 | 10,000 HTTP/1.1 stampede |
-| Oversold tickets | 0 | **0** on pessimistic, conditional, and Redis |
-| Checkout p99 | < 200 ms | **Not met** (tens of seconds on one hot row) |
-
-The 200 ms number is a target, not a result. A true 10k stampede against a
-single tier queues on one InnoDB row (or one Redis key plus inserts), so
-p99 tracks wall-clock. Zero oversell is the claim the harness actually
-supports. Method, knobs, and per-strategy tables: [docs/load-test.md](docs/load-test.md).
+| Environment variables | [docs/configuration.md](docs/configuration.md) |
+| HTTP API and error codes | [docs/api.md](docs/api.md) |
+| Synthetic sales history | [docs/seed-data.md](docs/seed-data.md) |
+| How the pieces fit | [docs/architecture.md](docs/architecture.md) |
+| 10k-buyer stampede | [docs/load-test.md](docs/load-test.md) |

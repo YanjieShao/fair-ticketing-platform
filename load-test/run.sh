@@ -7,7 +7,7 @@
 #
 #   ./run.sh smoke                         # 500 vs 100, matches the concurrency IT
 #   ./run.sh contention                    # 10k vs 3k, demand exceeds supply
-#   ./run.sh target                        # 10k vs 30k, the README headline
+#   ./run.sh target                        # 10k vs 30k
 #   ./run.sh target http://localhost:8080
 set -euo pipefail
 

@@ -1,9 +1,9 @@
 # Load test report
 
-Measured on 14 August 2026 against a single hot ticket tier. The README
-headline is **30,000 tickets / 10,000 concurrent buyers / zero oversell /
-checkout p99 < 200 ms**. This document records what actually happened on
-this laptop, how to reproduce it, and why p99 missed.
+Measured on 14 August 2026 against a single hot ticket tier. The aim was
+**30,000 tickets / 10,000 concurrent buyers / zero oversell / checkout p99
+under 200 ms**. This document records what actually happened on this laptop,
+how to reproduce it, and why p99 missed. Zero oversell held; p99 did not.
 
 Raw client output lives next to the harness:
 
@@ -119,7 +119,7 @@ run that is tens of seconds, not 200 ms.
 A p99 under 200 ms on a true 10k stampede would need a different shape:
 waiting-room admission, many independent SKUs, or a much larger machine.
 It is not a realistic claim for a laptop Colima VM hitting one tier. The
-number stays in the README as the **target**, not as a result.
+200 ms figure is the **target**, not a result.
 
 ## Findings worth keeping
 
