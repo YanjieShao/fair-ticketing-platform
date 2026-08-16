@@ -367,7 +367,7 @@ class BuyingTicketsApiIT extends AbstractIntegrationTest {
         }
 
         @Test
-        @DisplayName("returning paid tickets restocks the tier and frees the one-order lock")
+        @DisplayName("returning paid tickets restocks the tier")
         void returning_completed_tickets_puts_them_back_on_sale() throws Exception {
             String orderNo = orderNoFrom(checkout(buyerToken, standingTierId, 2, "key-1"));
             http.perform(post("/api/orders/" + orderNo + "/pay")

@@ -18,7 +18,7 @@ test('a visitor can search for a listed show', async ({ page }) => {
   await expect(page.getByRole('heading', { name: showTitle })).toBeVisible()
 })
 
-test('a new buyer can hold tickets and pay', async ({ page }) => {
+test('a new buyer can purchase tickets and confirm', async ({ page }) => {
   const email = `e2e-${Date.now()}@example.com`
   await page.goto('/register')
   await page.getByLabel('Name').fill('E2E Buyer')

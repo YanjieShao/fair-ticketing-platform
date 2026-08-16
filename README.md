@@ -12,8 +12,8 @@ The name commits the system to three mechanisms, each of which is testable:
    expected to be oversubscribed, buyers are queued and released at a
    controlled rate instead of racing each other.
 2. **The waitlist is strictly first in, first out.** Inventory returned by a
-   cancelled or expired order goes to the head of the queue, who gets an
-   exclusive, time-boxed window to buy before it passes on.
+   cancelled, expired, or mock-returned order goes to the head of the queue,
+   who gets an exclusive, time-boxed window to buy before it passes on.
 3. **Purchase limits, rate limits, and idempotency remove the bot advantage.**
    A script cannot obtain more than a human, and a retried request cannot
    produce a second order.
@@ -121,7 +121,7 @@ cd frontend
 npm test
 ```
 
-Playwright covers the buyer's main path (search, register, hold, pay). It
+Playwright covers the buyer's main path (search, register, purchase, confirm). It
 expects MySQL, Redis, and the API on :8080, then starts Vite if needed:
 
 ```bash
@@ -178,10 +178,10 @@ in line rather than whoever hits checkout first.
 | POST | `/api/waitlist` | buyer | join after a tier sells out |
 | GET | `/api/waitlist`, `/api/waitlist/{id}` | buyer | place in line and offer window |
 | DELETE | `/api/waitlist/{id}` | buyer | leave the queue |
-| POST | `/api/orders` | buyer | hold tickets, requires `Idempotency-Key` |
-| POST | `/api/orders/{orderNo}/pay` | buyer | pay through the mock provider |
+| POST | `/api/orders` | buyer | reserve a tier, requires `Idempotency-Key` |
+| POST | `/api/orders/{orderNo}/pay` | buyer | confirm through the mock provider |
 | POST | `/api/orders/{orderNo}/cancel` | buyer | release a hold or return paid tickets |
-| GET | `/api/orders`, `/api/orders/{orderNo}` | buyer | order history |
+| GET | `/api/orders`, `/api/orders/{orderNo}` | buyer | history, including show, artist, venue, and tier |
 
 ### Errors
 
@@ -195,7 +195,8 @@ controller runs, comes back in one shape:
 `code` is the stable part and the one clients should branch on. Losing a race
 for a ticket is an ordinary outcome rather than a fault, so those answer 409
 with a code that says which rule stopped the buyer: `SOLD_OUT`,
-`PURCHASE_LIMIT_EXCEEDED`, `DUPLICATE_ACTIVE_ORDER`, `EVENT_NOT_ON_SALE`.
+`PURCHASE_LIMIT_EXCEEDED`, `EVENT_NOT_ON_SALE`. The per-user cap is the sum of
+tickets already held on that tier, not one order per event.
 Jumping the waiting room answers 403 with `WAITING_ROOM_TOKEN_REQUIRED`.
 A 500 means the server genuinely broke, and nothing a client can send should
 produce one.
