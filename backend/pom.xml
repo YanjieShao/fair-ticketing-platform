@@ -20,6 +20,9 @@
     <properties>
         <java.version>21</java.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <!-- Unit-test line coverage gate (surefire only). *IT, load-test
+             fixtures, and the synthetic seeder stay outside this number. -->
+        <jacoco.unit.minimum>0.95</jacoco.unit.minimum>
     </properties>
 
     <!-- Spring Boot 4 no longer manages Testcontainers versions, and the version
@@ -147,6 +150,69 @@
                             <goal>integration-test</goal>
                             <goal>verify</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <configuration>
+                    <!-- Unit-test gate. These need a JVM+DB/Redis or are Spring
+                         wiring / HTTP adapters; *IT already exercises them. -->
+                    <excludes>
+                        <exclude>com/fairticketing/FairTicketingApplication.class</exclude>
+                        <exclude>com/fairticketing/loadtest/**</exclude>
+                        <exclude>com/fairticketing/seed/SyntheticDataGenerator*</exclude>
+                        <exclude>com/fairticketing/ai/service/MlDemandForecastClient*</exclude>
+                        <exclude>com/fairticketing/auth/config/**</exclude>
+                        <exclude>com/fairticketing/auth/EnsureAdminAccount.class</exclude>
+                        <exclude>com/fairticketing/common/config/ClockConfig.class</exclude>
+                        <exclude>com/fairticketing/common/config/WebMvcConfig.class</exclude>
+                        <exclude>com/fairticketing/inventory/service/RedisLuaInventoryReserver.class</exclude>
+                        <exclude>com/fairticketing/common/ratelimit/RedisRateLimitStore.class</exclude>
+                        <exclude>com/fairticketing/waitingroom/web/WaitingRoomStreamer.class</exclude>
+                        <exclude>com/fairticketing/ai/repository/DemandFeatureJdbc.class</exclude>
+                        <exclude>com/fairticketing/ai/service/MlDemandForecastClient.class</exclude>
+                        <exclude>com/fairticketing/analytics/DashboardRepository.class</exclude>
+                        <exclude>com/fairticketing/analytics/SalesSnapshotRepository.class</exclude>
+                        <exclude>com/fairticketing/event/service/EventSpecifications.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-unit-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report-unit</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check-unit</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.unit.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

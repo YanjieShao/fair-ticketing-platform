@@ -1,0 +1,35 @@
+# Optional overlay: run the API and UI as images on top of MySQL/Redis.
+# Local / VM: docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+# Needs FT_JWT_SECRET in .env (Compose loads it). UI is nginx on :80.
+
+services:
+  backend:
+    build: ./backend
+    image: fair-ticketing-backend:local
+    container_name: ft-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/fair_ticketing?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_USERNAME: ticketing
+      SPRING_DATASOURCE_PASSWORD: ticketing
+      SPRING_DATA_REDIS_HOST: redis
+      FT_JWT_SECRET: ${FT_JWT_SECRET:?set FT_JWT_SECRET in .env}
+      FT_CORS_ORIGINS: ${FT_CORS_ORIGINS:-http://localhost}
+      FT_WAITING_ROOM_ENABLED: ${FT_WAITING_ROOM_ENABLED:-false}
+      FT_SEED_ENABLED: ${FT_SEED_ENABLED:-false}
+      FT_LOADTEST_ENABLED: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    image: fair-ticketing-frontend:local
+    container_name: ft-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"

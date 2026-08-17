@@ -65,12 +65,49 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install, test, and build
+      - name: Install, lint, test, and build
         working-directory: frontend
         run: |
           npm ci
-          npm test
+          npm run lint
+          npm test -- --coverage
           npm run build
+
+  images:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application images
+        run: |
+          docker build -t fair-ticketing-backend:${{ github.sha }} backend
+          docker build -t fair-ticketing-frontend:${{ github.sha }} frontend
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [images]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push images to GHCR
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BACKEND=ghcr.io/${OWNER}/fair-ticketing-backend
+          FRONTEND=ghcr.io/${OWNER}/fair-ticketing-frontend
+          docker build -t "$BACKEND:${{ github.sha }}" -t "$BACKEND:latest" backend
+          docker build -t "$FRONTEND:${{ github.sha }}" -t "$FRONTEND:latest" frontend
+          docker push "$BACKEND:${{ github.sha }}"
+          docker push "$BACKEND:latest"
+          docker push "$FRONTEND:${{ github.sha }}"
+          docker push "$FRONTEND:latest"
 
   ml:
     runs-on: ubuntu-latest

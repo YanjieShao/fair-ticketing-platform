@@ -97,9 +97,19 @@ The admin dashboard is the same idea in a different shape: JDBC aggregates
 sell-through, waitlist pressure, paid revenue, order status, category mix,
 and the last 14 days of paid tickets. Recharts only draws those arrays.
 
+## Notifications are in-process
+
+There is no Kafka topic and no outbox table in v1. Order, waitlist, and
+insight code call `NotificationService` directly. Each write runs in a
+`REQUIRES_NEW` transaction so a duplicate-key miss does not roll back the
+purchase. Transactional copy is a template; insight copy is a paragraph the
+analytics job already produced. `payloadJson` and `generatedBy` stay on the
+row. Dedup is the unique `dedupe_key`.
+
 Prometheus and Grafana would graph *process* metrics (request rate, p99,
 JVM, MySQL) for operators. They are not the sales dashboard and stay
-optional.
+optional. How images are built and how a VM runs them:
+[ci.md](ci.md), [deploy.md](deploy.md).
 
 Admins can list a show from `/admin/events/new`. Only a draft can be taken
 down; once tickets are on sale, cancellation is out of scope. Buyers read

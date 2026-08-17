@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -142,6 +143,103 @@ class WaitlistServiceTest {
                 .extracting("code").isEqualTo(ErrorCode.OFFER_WINDOW_CLOSED);
         assertThat(entry.getStatus()).isEqualTo(WaitlistStatus.OFFERED);
         verify(inventory, never()).release(anyLong(), anyInt(), any(), any());
+    }
+
+    @Test
+    void join_rejects_drafts_oversize_requests_and_missing_tiers() {
+        when(tiers.findPurchaseView(TIER_ID)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> waitlist.join(USER_ID, TIER_ID, 1))
+                .extracting("code").isEqualTo(ErrorCode.NOT_FOUND);
+
+        givenTier(EventStatus.DRAFT);
+        assertThatThrownBy(() -> waitlist.join(USER_ID, TIER_ID, 1))
+                .extracting("code").isEqualTo(ErrorCode.EVENT_NOT_ON_SALE);
+
+        givenTier(EventStatus.SOLD_OUT);
+        when(inventory.remaining(TIER_ID)).thenReturn(0);
+        assertThatThrownBy(() -> waitlist.join(USER_ID, TIER_ID, 0))
+                .extracting("code").isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        when(orders.sumOccupyingQuantity(anyLong(), anyLong(), any())).thenReturn(3);
+        assertThatThrownBy(() -> waitlist.join(USER_ID, TIER_ID, 2))
+                .extracting("code").isEqualTo(ErrorCode.PURCHASE_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void a_live_offer_can_be_consumed_then_marked_converted() {
+        WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 1, NOW);
+        entry.offer(NOW, NOW.plus(Duration.ofMinutes(15)));
+        when(entries.findByUserIdAndTierIdAndStatus(USER_ID, TIER_ID, WaitlistStatus.OFFERED))
+                .thenReturn(Optional.of(entry));
+
+        assertThat(waitlist.consumeOffer(USER_ID, TIER_ID, 2)).contains(entry);
+        assertThatThrownBy(() -> waitlist.consumeOffer(USER_ID, TIER_ID, 1))
+                .extracting("code").isEqualTo(ErrorCode.VALIDATION_FAILED);
+        waitlist.markConverted(entry, 99L);
+        assertThat(entry.getStatus()).isEqualTo(WaitlistStatus.CONVERTED);
+        assertThat(waitlist.peopleAhead(entry)).isZero();
+    }
+
+    @Test
+    void consume_offer_is_empty_when_the_buyer_has_none() {
+        when(entries.findByUserIdAndTierIdAndStatus(USER_ID, TIER_ID, WaitlistStatus.OFFERED))
+                .thenReturn(Optional.empty());
+        assertThat(waitlist.consumeOffer(USER_ID, TIER_ID, 2)).isEmpty();
+    }
+
+    @Test
+    void leave_releases_an_offer_and_passes_it_on() {
+        WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 1, NOW);
+        entry.offer(NOW, NOW.plus(Duration.ofMinutes(15)));
+        when(entries.findById(1L)).thenReturn(Optional.of(entry));
+        when(entries.findFirstByTierIdAndStatusOrderByPositionSeqAsc(TIER_ID, WaitlistStatus.WAITING))
+                .thenReturn(Optional.empty());
+
+        assertThat(waitlist.leave(USER_ID, 1L).getStatus()).isEqualTo(WaitlistStatus.CANCELLED);
+        verify(inventory).release(eq(TIER_ID), eq(2), isNull(), eq(InventoryLedgerEntry.Reason.RELEASE_OFFER_CANCELLED));
+    }
+
+    @Test
+    void findOwned_hides_other_people_entries() {
+        WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, 99L, 2, 1, NOW);
+        when(entries.findById(1L)).thenReturn(Optional.of(entry));
+        assertThatThrownBy(() -> waitlist.findOwned(USER_ID, 1L))
+                .extracting("code").isEqualTo(ErrorCode.NOT_FOUND);
+        when(entries.findById(2L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> waitlist.findOwned(USER_ID, 2L))
+                .extracting("code").isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void people_ahead_counts_only_waiting_entries() {
+        WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 5, NOW);
+        when(entries.countByTierIdAndStatusAndPositionSeqLessThan(TIER_ID, WaitlistStatus.WAITING, 5L))
+                .thenReturn(4L);
+        assertThat(waitlist.peopleAhead(entry)).isEqualTo(4);
+    }
+
+    @Test
+    void overdue_offers_are_released_and_passed_on() {
+        WaitlistEntry entry = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 1, NOW);
+        entry.offer(NOW.minus(Duration.ofMinutes(20)), NOW.minus(Duration.ofMinutes(1)));
+        when(entries.findExpiredOffers(NOW)).thenReturn(List.of(entry));
+        when(entries.findFirstByTierIdAndStatusOrderByPositionSeqAsc(TIER_ID, WaitlistStatus.WAITING))
+                .thenReturn(Optional.empty());
+
+        assertThat(waitlist.expireOverdueOffers()).isEqualTo(1);
+        assertThat(entry.getStatus()).isEqualTo(WaitlistStatus.OFFER_EXPIRED);
+        verify(inventory).release(eq(TIER_ID), eq(2), isNull(), eq(InventoryLedgerEntry.Reason.RELEASE_OFFER_EXPIRED));
+    }
+
+    @Test
+    void offer_head_stops_when_reserve_loses_the_race() {
+        WaitlistEntry head = WaitlistEntry.join(EVENT_ID, TIER_ID, USER_ID, 2, 1, NOW);
+        when(entries.findFirstByTierIdAndStatusOrderByPositionSeqAsc(TIER_ID, WaitlistStatus.WAITING))
+                .thenReturn(Optional.of(head));
+        when(inventory.remaining(TIER_ID)).thenReturn(2);
+        when(inventory.tryReserve(TIER_ID, 2)).thenReturn(false);
+        waitlist.offerHead(TIER_ID);
+        assertThat(head.getStatus()).isEqualTo(WaitlistStatus.WAITING);
     }
 
     private void givenTier(EventStatus status) {

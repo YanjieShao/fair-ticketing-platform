@@ -12,6 +12,13 @@ the run command:
 export $(grep -v '^#' .env | xargs) && ./mvnw spring-boot:run
 ```
 
+`docker compose` **does** load `.env` from the repository root. That is how
+`docker-compose.app.yml` picks up `FT_JWT_SECRET`. The overlay also points
+the API at the `mysql` and `redis` service hostnames and sets
+`FT_CORS_ORIGINS` to `http://localhost` for the nginx UI on port 80. The
+Vite default below (`http://localhost:5173`) is for the hot-reload
+quickstart.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `FT_JWT_SECRET` | dev placeholder | HMAC key for access tokens; at least 32 bytes |

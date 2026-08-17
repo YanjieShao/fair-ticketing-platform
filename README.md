@@ -62,10 +62,18 @@ is missing.
 `docker-compose.yml` uses local demo credentials (`ticketing` / `ticketing`).
 Do not reuse them anywhere public.
 
+To run the API and UI as images instead of Vite (nginx on port 80, `/api`
+proxied to the backend):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+```
+
 The demand model, waiting room, and seed history are optional for a first
 run. How to turn them on: [backend/README.md](backend/README.md),
 [ml-service/README.md](ml-service/README.md), and
-[docs/seed-data.md](docs/seed-data.md).
+[docs/seed-data.md](docs/seed-data.md). A cloud VM uses the same overlay:
+[docs/deploy.md](docs/deploy.md).
 
 ### Architecture
 
@@ -93,12 +101,17 @@ Inventory strategies, lock order, and why inference stays off the hot path:
 ### Testing
 
 ```bash
-cd backend && ./mvnw test          # unit tests, JVM only
+cd backend && ./mvnw test          # unit tests + 95% line coverage gate
 cd backend && ./mvnw verify        # also the MySQL/Redis integration tests
+cd frontend && npm run lint        # oxlint
 cd frontend && npm test            # Vitest
+cd frontend && npm test -- --coverage   # src/api and src/auth, 95% lines
 cd frontend && npm run e2e         # Playwright; needs the API on :8080
 cd ml-service && pytest
 ```
+
+Pull requests run on GitHub Actions. A `Jenkinsfile` is a second, optional
+runner (unit tests and image builds only). Details: [docs/ci.md](docs/ci.md).
 
 Colima, Testcontainers, and what the concurrency tests actually assert:
 [backend/README.md](backend/README.md).
@@ -112,3 +125,5 @@ Colima, Testcontainers, and what the concurrency tests actually assert:
 | Synthetic sales history | [docs/seed-data.md](docs/seed-data.md) |
 | How the pieces fit | [docs/architecture.md](docs/architecture.md) |
 | 10k-buyer stampede | [docs/load-test.md](docs/load-test.md) |
+| CI (GitHub Actions and Jenkins) | [docs/ci.md](docs/ci.md) |
+| Docker images and cloud VM | [docs/deploy.md](docs/deploy.md) |

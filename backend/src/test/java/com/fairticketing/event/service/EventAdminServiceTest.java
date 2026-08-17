@@ -100,6 +100,36 @@ class EventAdminServiceTest {
                 .isEqualTo(ErrorCode.ILLEGAL_STATE_TRANSITION);
     }
 
+    @Test
+    void publish_moves_a_draft_on_sale() {
+        Event draft = new Event();
+        draft.setStatus(EventStatus.DRAFT);
+        when(events.findById(8L)).thenReturn(Optional.of(draft));
+        when(queries.detail(8L)).thenReturn(detail(EventStatus.ON_SALE));
+        assertThat(service.publish(8L).status()).isEqualTo(EventStatus.ON_SALE);
+    }
+
+    @Test
+    void publish_rejects_a_missing_show() {
+        when(events.findById(8L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.publish(8L)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void create_reuses_an_existing_artist_and_venue() {
+        when(artists.findByNameIgnoreCase("E2E Act")).thenReturn(Optional.of(new Artist("E2E Act", "Pop", 40)));
+        when(venues.findByNameAndCityIgnoreCase("E2E Hall", "Dublin"))
+                .thenReturn(Optional.of(new Venue("E2E Hall", "Dublin", "Ireland", 2000, "Europe/Dublin")));
+
+        service.create(request(
+                NOW.plus(java.time.Duration.ofDays(1)),
+                NOW.plus(java.time.Duration.ofDays(59)),
+                NOW.plus(java.time.Duration.ofDays(60))));
+
+        verify(artists, org.mockito.Mockito.never()).save(any());
+        verify(venues, org.mockito.Mockito.never()).save(any());
+    }
+
     private static CreateEventRequest request(Instant salesStart, Instant salesEnd, Instant starts) {
         return new CreateEventRequest(
                 "E2E Night",

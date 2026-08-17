@@ -13,7 +13,8 @@ cd backend
 
 Listens on http://localhost:8080. Environment variables:
 [docs/configuration.md](../docs/configuration.md). HTTP routes:
-[docs/api.md](../docs/api.md).
+[docs/api.md](../docs/api.md). Application image: `backend/Dockerfile`,
+run with the overlay in [docs/deploy.md](../docs/deploy.md).
 
 To fill dashboards and train the demand model, start once with
 `FT_SEED_ENABLED=true` ([docs/seed-data.md](../docs/seed-data.md)). To have
@@ -26,9 +27,14 @@ which events use the room.
 ## Tests
 
 ```bash
-./mvnw test      # unit tests, no Docker
+./mvnw test      # unit tests, no Docker; JaCoCo fails the build under 95% line coverage
 ./mvnw verify    # unit tests plus *IT against a real MySQL and Redis
 ```
+
+The 95% gate is unit tests only (`mvn test`). Integration tests, Redis Lua, JDBC
+read models, and Spring wiring classes are excluded from that bundle on purpose:
+they are exercised by `mvn verify` and GitHub Actions, not by the line-count
+target. HTML report: `backend/target/site/jacoco/index.html`.
 
 Integration tests need a real database because the behaviour that matters
 (row locks, unique indexes, oversell checks) does not exist in H2.
