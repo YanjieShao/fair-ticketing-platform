@@ -26,7 +26,7 @@ quickstart.
 | `FT_WAITING_ROOM_ENABLED` | `false` | gate checkout behind the queue |
 | `FT_WAITING_ROOM_RATE` | `20` | admissions per second once the room is on |
 | `FT_PAYMENT_FAILURE_RATE` | `0.0` | forces declined payments for demos |
-| `FT_SEED_ENABLED` | `false` | generates the synthetic sales history |
+| `FT_SEED_ENABLED` | `true` in `.env.example` / Compose overlay; `false` in `application.yml` if unset | synthetic sales history for dashboards; skips when artists already exist |
 | `FT_CORS_ORIGINS` | `http://localhost:5173` | browser origins allowed to call the API directly |
 | `FT_ML_BASE_URL` | `http://localhost:8090` | Python demand model |
 | `FT_FORECAST_ON_START` | `false` | run a forecast pass when the backend boots |

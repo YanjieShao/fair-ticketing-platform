@@ -8,7 +8,8 @@ projects to exist.
 **Laptop / demo with hot reload:** Compose for MySQL and Redis only, then
 `./mvnw spring-boot:run` and `npm run dev`. The UI is http://localhost:5173
 and Vite proxies `/api` to :8080. That is the [root README](../README.md)
-quickstart.
+quickstart. Dashboards stay empty until `FT_SEED_ENABLED=true` is exported
+for that Java process; [seed-data.md](seed-data.md).
 
 **Application images:** `backend/Dockerfile` (Temurin 21) and
 `frontend/Dockerfile` (Node 22 build, nginx 1.27). The UI is on port 80 and
@@ -16,13 +17,17 @@ proxies `/api/` to the backend container, including the waiting-room SSE
 stream. CORS does not matter for that path.
 
 ```bash
-cp .env.example .env   # set FT_JWT_SECRET (Compose reads .env for you)
+cp .env.example .env   # set a private FT_JWT_SECRET; seed is on for the first boot
 docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
 ```
 
+The first start writes synthetic sales so the admin dashboard has numbers.
+Later starts skip seeding. Insights still need **Generate now** (or
+`FT_INSIGHTS_ON_START=true`). Leave `FT_LOADTEST_ENABLED=false`.
+
 `docker-compose.app.yml` overrides the JDBC URL and Redis host to the Compose
 service names (`mysql`, `redis`) and sets `FT_CORS_ORIGINS` to
-`http://localhost` for the nginx UI. Leave `FT_LOADTEST_ENABLED=false`.
+`http://localhost` for the nginx UI on port 80.
 
 ## Images on GitHub
 
@@ -50,7 +55,8 @@ docker compose -f docker-compose.yml -f docker-compose.app.yml up -d
 2. Install Docker and the Compose plugin.
 3. Copy this repository, or pull/retag the GHCR images as above.
 4. Put a production `FT_JWT_SECRET` in `.env`. If the browser will call
-   `:8080` directly, set `FT_CORS_ORIGINS` to that public origin.
+   `:8080` directly, set `FT_CORS_ORIGINS` to that public origin. Keep
+   `FT_SEED_ENABLED=true` if the VM should show a filled dashboard.
 5. Run the same Compose overlay command.
 
 A managed MySQL/Redis pair plus two container apps is a later hardening

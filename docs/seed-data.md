@@ -11,9 +11,17 @@ in demand.
 FT_SEED_ENABLED=true ./mvnw spring-boot:run
 ```
 
+Same switch for the application-image overlay (Compose reads `.env`):
+
+```bash
+# .env already has FT_SEED_ENABLED=true when copied from .env.example
+docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+```
+
 It runs once and skips if data is already present. The random seed is
 `20260814` (see `ticketing.seed` in `application.yml`), so the dataset is
-reproducible.
+reproducible. Admin **Generate now** only phrases live sales; it does not
+create this history. Without a seed (or real orders) the dashboard is zeros.
 
 Defaults:
 

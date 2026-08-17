@@ -66,14 +66,20 @@ To run the API and UI as images instead of Vite (nginx on port 80, `/api`
 proxied to the backend):
 
 ```bash
+cp .env.example .env   # first time; includes FT_SEED_ENABLED=true
 docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
 ```
 
-The demand model, waiting room, and seed history are optional for a first
-run. How to turn them on: [backend/README.md](backend/README.md),
-[ml-service/README.md](ml-service/README.md), and
-[docs/seed-data.md](docs/seed-data.md). A cloud VM uses the same overlay:
-[docs/deploy.md](docs/deploy.md).
+Open http://localhost (not :5173). The first start fills the dashboard from
+synthetic sales history and can take a few minutes; later starts skip if
+the data is already there. Then sign in as admin and use **Generate now**
+on Insights to write the briefings (that button does not create sales).
+Details: [docs/seed-data.md](docs/seed-data.md). A cloud VM uses the same
+overlay: [docs/deploy.md](docs/deploy.md).
+
+The demand model and waiting room stay optional:
+[backend/README.md](backend/README.md),
+[ml-service/README.md](ml-service/README.md).
 
 ### Architecture
 

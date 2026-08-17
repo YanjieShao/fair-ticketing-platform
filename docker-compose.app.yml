@@ -1,6 +1,7 @@
 # Optional overlay: run the API and UI as images on top of MySQL/Redis.
 # Local / VM: docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
 # Needs FT_JWT_SECRET in .env (Compose loads it). UI is nginx on :80.
+# FT_SEED_ENABLED defaults on so the dashboard is not empty on first boot.
 
 services:
   backend:
@@ -15,7 +16,7 @@ services:
       FT_JWT_SECRET: ${FT_JWT_SECRET:?set FT_JWT_SECRET in .env}
       FT_CORS_ORIGINS: ${FT_CORS_ORIGINS:-http://localhost}
       FT_WAITING_ROOM_ENABLED: ${FT_WAITING_ROOM_ENABLED:-false}
-      FT_SEED_ENABLED: ${FT_SEED_ENABLED:-false}
+      FT_SEED_ENABLED: ${FT_SEED_ENABLED:-true}
       FT_LOADTEST_ENABLED: "false"
     depends_on:
       mysql:
